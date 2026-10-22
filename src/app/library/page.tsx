@@ -1,68 +1,251 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { DEFAULT_LIST, useBookmarks } from "@/components/BookmarksProvider";
+import { useState } from "react";
 import { BookmarkButton } from "@/components/BookmarkButton";
+import { useBookmarks } from "@/components/BookmarksProvider";
+import { FolderIcon } from "@/components/FolderPicker";
 import { formatStars } from "@/components/RepoCard";
+import { DEFAULT_LIST, FOLDER_SUGGESTIONS, MAX_FOLDER_NAME, sameName, validateFolderName } from "@/lib/folders";
 
-const NEW_LIST = "__new__";
+type Mode = "idle" | "new" | "rename" | "delete";
 
 export default function LibraryPage() {
-  const { bookmarks, ready, moveToList } = useBookmarks();
+  const { bookmarks, folders, ready, createFolder, renameFolder, deleteFolder, openFolderPicker, canShare, shares, shareFolder, unshareFolder } = useBookmarks();
+  const [sharing, setSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const [active, setActive] = useState("All");
   const [filter, setFilter] = useState("");
-
-  const lists = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const b of bookmarks) counts.set(b.list, (counts.get(b.list) ?? 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
-  }, [bookmarks]);
-
-  const shown = bookmarks.filter(
-    (b) =>
-      (active === "All" || b.list === active) &&
-      (!filter || `${b.fullName} ${b.description ?? ""}`.toLowerCase().includes(filter.toLowerCase())),
-  );
+  const [mode, setMode] = useState<Mode>("idle");
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   if (!ready) return <p className="muted">Loading…</p>;
 
-  function changeList(fullName: string, value: string) {
-    if (value !== NEW_LIST) return moveToList(fullName, value);
-    const name = window.prompt("Name your new list")?.trim();
-    if (name) moveToList(fullName, name.slice(0, 40));
+  const count = (f: string) => bookmarks.filter((b) => sameName(b.list, f)).length;
+  const current = active === "All" || folders.some((f) => sameName(f, active)) ? active : "All";
+  const editable = current !== "All" && current !== DEFAULT_LIST;
+
+  const shown = bookmarks.filter(
+    (b) =>
+      (current === "All" || sameName(b.list, current)) &&
+      (!filter || `${b.fullName} ${b.description ?? ""}`.toLowerCase().includes(filter.toLowerCase())),
+  );
+
+  function reset() {
+    setMode("idle");
+    setDraft("");
+    setError(null);
+  }
+
+  async function submitNew(value: string) {
+    const err = validateFolderName(value, folders);
+    if (err) return setError(err);
+    const made = await createFolder(value);
+    if (made) {
+      setActive(made);
+      reset();
+    }
+  }
+
+  async function submitRename() {
+    const err = validateFolderName(draft, folders, current);
+    if (err) return setError(err);
+    await renameFolder(current, draft.trim());
+    setActive(draft.trim());
+    reset();
+  }
+
+  const suggestions = FOLDER_SUGGESTIONS.filter((s) => !folders.some((f) => sameName(f, s)));
+
+  const share = current === "All" ? undefined : shares.find((s) => sameName(s.folder, current));
+  const shareUrl = share && typeof window !== "undefined" ? `${window.location.origin}/shared/${share.id}` : "";
+  const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  async function copy(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch {
+      // Clipboard blocked: the link is still selectable in the box.
+    }
+  }
+
+  async function startSharing() {
+    setSharing(true);
+    setShareError(null);
+    try {
+      const s = await shareFolder(current);
+      if (s) await copy(`${window.location.origin}/shared/${s.id}`);
+    } catch {
+      setShareError("Couldn’t create the link. Try again in a moment.");
+    } finally {
+      setSharing(false);
+    }
+  }
+
+  async function stopSharing() {
+    setShareError(null);
+    try {
+      await unshareFolder(current);
+    } catch {
+      setShareError("Couldn’t stop sharing. Try again in a moment.");
+    }
   }
 
   return (
     <>
       <h1>Library</h1>
-      <input
-        className="filter"
-        type="search"
-        placeholder="Filter your saves…"
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        aria-label="Filter your saved repos"
-      />
-      <div className="chips">
-        <button className={`chip${active === "All" ? " is-active" : ""}`} onClick={() => setActive("All")}>
-          All · {bookmarks.length}
+
+      <div className="folders" role="tablist" aria-label="Folders">
+        <button role="tab" aria-selected={current === "All"} className={`folder-tile${current === "All" ? " is-active" : ""}`} onClick={() => { setActive("All"); reset(); }}>
+          <FolderIcon />
+          <span className="folder-name">All</span>
+          <span className="folder-count">{bookmarks.length}</span>
         </button>
-        {lists.map(([name, n]) => (
-          <button key={name} className={`chip${active === name ? " is-active" : ""}`} onClick={() => setActive(name)}>
-            {name} · {n}
+        {folders.map((f) => (
+          <button key={f} role="tab" aria-selected={sameName(f, current)} className={`folder-tile${sameName(f, current) ? " is-active" : ""}`} onClick={() => { setActive(f); reset(); }}>
+            <FolderIcon />
+            <span className="folder-name">{f}</span>
+            <span className="folder-count">{count(f)}</span>
           </button>
         ))}
+        <button className="folder-tile folder-add" onClick={() => { setMode(mode === "new" ? "idle" : "new"); setDraft(""); setError(null); }} aria-expanded={mode === "new"}>
+          <span aria-hidden="true">＋</span>
+          <span className="folder-name">New folder</span>
+        </button>
       </div>
+
+      {mode === "new" && (
+        <div className="notice">
+          <form
+            className="folder-new"
+            style={{ width: "100%" }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitNew(draft);
+            }}
+          >
+            <input
+              autoFocus
+              value={draft}
+              maxLength={MAX_FOLDER_NAME}
+              onChange={(e) => { setDraft(e.target.value); setError(null); }}
+              placeholder="Folder name, e.g. Java"
+              aria-label="New folder name"
+              aria-invalid={Boolean(error)}
+            />
+            <button className="btn primary" type="submit">Create</button>
+            <button className="btn" type="button" onClick={reset}>Cancel</button>
+          </form>
+          {error && <span className="error" role="alert">{error}</span>}
+          {suggestions.length > 0 && (
+            <div className="chips">
+              {suggestions.map((s) => (
+                <button key={s} className="chip chip-sm" onClick={() => submitNew(s)}>+ {s}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {editable && mode !== "new" && (
+        <div className="folder-bar">
+          {mode === "rename" ? (
+            <form
+              className="folder-new"
+              onSubmit={(e) => {
+                e.preventDefault();
+                submitRename();
+              }}
+            >
+              <input autoFocus value={draft} maxLength={MAX_FOLDER_NAME} onChange={(e) => { setDraft(e.target.value); setError(null); }} aria-label="Folder name" aria-invalid={Boolean(error)} />
+              <button className="btn primary" type="submit">Save</button>
+              <button className="btn" type="button" onClick={reset}>Cancel</button>
+            </form>
+          ) : mode === "delete" ? (
+            <>
+              <span className="muted">Delete “{current}”? {count(current) === 1 ? "Its 1 repo moves" : `Its ${count(current)} repos move`} back to {DEFAULT_LIST}.</span>
+              <button
+                className="btn danger"
+                onClick={async () => {
+                  await deleteFolder(current);
+                  setActive("All");
+                  reset();
+                }}
+              >
+                Delete folder
+              </button>
+              <button className="btn" onClick={reset}>Cancel</button>
+            </>
+          ) : (
+            <>
+              <strong>{current}</strong>
+              <button className="link-btn" onClick={() => { setMode("rename"); setDraft(current); setError(null); }}>Rename</button>
+              <button className="link-btn" onClick={() => setMode("delete")}>Delete</button>
+            </>
+          )}
+          {error && <span className="error" role="alert">{error}</span>}
+        </div>
+      )}
+
+      {current !== "All" && mode !== "new" && (
+        <div className="share-box">
+          {share ? (
+            <>
+              <div className="share-row">
+                <span className="badge">Shared</span>
+                <input readOnly value={shareUrl} onFocus={(e) => e.currentTarget.select()} aria-label={`Share link for ${current}`} />
+                <button className="btn" onClick={() => copy(shareUrl)}>{copied ? "Copied ✓" : "Copy link"}</button>
+                {canNativeShare && (
+                  <button className="btn" onClick={() => navigator.share({ title: `${current} on Punx Repo Archive`, url: shareUrl }).catch(() => {})}>Share…</button>
+                )}
+              </div>
+              <p className="muted share-note">
+                Anyone with this link can view “{current}” and save a copy. It updates when you change the folder.
+                {count(current) > 200 && " Only the first 200 repos are shared."}{" "}
+                <button className="link-btn" onClick={stopSharing}>Stop sharing</button>
+              </p>
+            </>
+          ) : canShare ? (
+            <div className="share-row">
+              <button className="btn" onClick={startSharing} disabled={sharing || count(current) === 0}>
+                {sharing ? "Creating link…" : "Share this folder"}
+              </button>
+              {count(current) === 0 && <span className="muted share-note">Add a repo first.</span>}
+            </div>
+          ) : (
+            <p className="muted share-note">
+              <Link href="/profile">Sign in</Link> to share “{current}” with a link.
+            </p>
+          )}
+          {shareError && <p className="error" role="alert">{shareError}</p>}
+        </div>
+      )}
+
+      {bookmarks.length > 0 && (
+        <input
+          className="filter"
+          type="search"
+          placeholder={current === "All" ? "Filter your saves…" : `Filter in ${current}…`}
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          aria-label="Filter your saved repos"
+        />
+      )}
 
       {bookmarks.length === 0 && (
         <div className="notice">
           <strong>Your library is empty</strong>
-          <span>Tap the bookmark on any repo to save it here. You can sort saves into your own lists.</span>
+          <span>Tap the bookmark on any repo to save it here, then sort saves into folders like Java or Design.</span>
           <Link className="btn primary" href="/search">Find repos</Link>
         </div>
       )}
-      {bookmarks.length > 0 && shown.length === 0 && <p className="muted">No saves match that filter.</p>}
+      {bookmarks.length > 0 && shown.length === 0 && (
+        <p className="muted">{filter ? "No saves match that filter." : `Nothing in ${current} yet. Open a saved repo and use its folder button to move it here.`}</p>
+      )}
 
       <div className="stack">
         {shown.map((b) => (
@@ -81,16 +264,10 @@ export default function LibraryPage() {
             </Link>
             <div className="card-side">
               <BookmarkButton repo={b} />
-              <select
-                value={b.list}
-                onChange={(e) => changeList(b.fullName, e.target.value)}
-                aria-label={`List for ${b.fullName}`}
-              >
-                {[...new Set([DEFAULT_LIST, ...lists.map(([n]) => n)])].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-                <option value={NEW_LIST}>New list…</option>
-              </select>
+              <button className="folder-btn" onClick={() => openFolderPicker(b.fullName)} aria-label={`Move ${b.fullName} to a folder. Currently in ${b.list}.`}>
+                <FolderIcon />
+                <span>{b.list}</span>
+              </button>
             </div>
           </article>
         ))}

@@ -1,9 +1,27 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each user can only read and write their own bookmarks.
+    // Each user can only read and write their own bookmarks and folders.
     match /users/{uid}/bookmarks/{id} {
       allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    match /users/{uid}/folders/{id} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Shared folders: anyone with the link can read one share by id, but nobody can
+    // list or search them. Only the owner can create, change or remove a share.
+    match /shares/{id} {
+      allow get: if true;
+      allow list: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.repos.size() <= 200;
+      allow update: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.repos.size() <= 200;
+      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
     }
   }
 }
