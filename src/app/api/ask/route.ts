@@ -1,0 +1,72 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { NextResponse } from "next/server";
+import { searchRepos } from "@/lib/github";
+import type { Repo } from "@/lib/types";
+
+const MODEL = "claude-sonnet-5-5";
+
+function text(res: Anthropic.Message) {
+  return res.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+}
+
+export async function POST(req: Request) {
+  const { question } = (await req.json().catch(() => ({}))) as { question?: string };
+  const q = question?.trim().slice(0, 500);
+  if (!q) return NextResponse.json({ error: "Ask a question first." }, { status: 400 });
+
+  try {
+    // Without an API key, degrade to a plain keyword search.
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return NextResponse.json({ answer: null, repos: await searchRepos(q, 10) });
+    }
+
+    const client = new Anthropic();
+
+    // Step 1: turn the question into GitHub search queries.
+    const plan = await client.messages.create({
+      model: MODEL,
+      max_tokens: 300,
+      messages: [
+        {
+          role: "user",
+          content: `Turn this request into 1-3 GitHub repository search queries (GitHub search syntax, e.g. "markdown editor language:typescript stars:>100"). Reply with only a JSON array of strings.\n\nRequest: ${q}`,
+        },
+      ],
+    });
+    let queries: string[] = [];
+    try {
+      const m = text(plan).match(/\[[\s\S]*\]/);
+      queries = m ? JSON.parse(m[0]) : [];
+    } catch {
+      queries = [];
+    }
+    if (!queries.length) queries = [q];
+
+    // Step 2: run them and dedupe.
+    const batches = await Promise.all(queries.slice(0, 3).map((s) => searchRepos(String(s), 8).catch(() => [] as Repo[])));
+    const seen = new Set<string>();
+    const repos = batches
+      .flat()
+      .filter((r) => !seen.has(r.fullName) && seen.add(r.fullName))
+      .slice(0, 10);
+
+    // Step 3: answer from the real results only.
+    const listing = repos
+      .map((r) => `- ${r.fullName} (★${r.stars}, ${r.language ?? "n/a"}): ${r.description ?? "no description"}`)
+      .join("\n");
+    const answer = await client.messages.create({
+      model: MODEL,
+      max_tokens: 500,
+      messages: [
+        {
+          role: "user",
+          content: `A user asked: "${q}"\n\nGitHub search results:\n${listing || "(none)"}\n\nIn 2-4 sentences, say whether a repo matching the request exists and which results fit best, naming them as owner/name. If nothing fits, say so plainly. Use only the results above; do not invent repos.`,
+        },
+      ],
+    });
+
+    return NextResponse.json({ answer: text(answer), repos });
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 502 });
+  }
+}

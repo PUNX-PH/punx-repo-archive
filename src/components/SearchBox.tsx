@@ -1,0 +1,31 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+export function SearchBox({ initial = "", autoFocus = false }: { initial?: string; autoFocus?: boolean }) {
+  const [q, setQ] = useState(initial);
+  const router = useRouter();
+
+  return (
+    <form
+      className="searchbox"
+      role="search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const v = q.trim();
+        if (v) router.push(`/search?q=${encodeURIComponent(v)}`);
+      }}
+    >
+      <input
+        type="search"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search repos, topics, authors…"
+        aria-label="Search repositories"
+        autoFocus={autoFocus}
+      />
+      <button type="submit">Search</button>
+    </form>
+  );
+}
