@@ -1,19 +1,16 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import type { Repo } from "@/lib/types";
 import { useBookmarks } from "./BookmarksProvider";
 
 export function BookmarkButton({ repo, label = false }: { repo: Repo; label?: boolean }) {
   const { isSaved, toggle } = useBookmarks();
-  const router = useRouter();
   const saved = isSaved(repo.fullName);
 
-  async function onClick(e: React.MouseEvent) {
+  function onClick(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    const ok = await toggle(repo);
-    if (!ok) router.push("/profile?next=save");
+    toggle(repo);
   }
 
   return (
