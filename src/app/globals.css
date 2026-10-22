@@ -1,26 +1,47 @@
 :root {
+  color-scheme: light;
   --bg: #faf8f4;
   --surface: #ffffff;
   --text: #1c1b1a;
-  --muted: #6f6a64;
-  --border: #e7e2da;
-  --accent: #e4572e;
+  --muted: #5f5a54;
+  --border: #e2dcd2;
+  --accent: #c2410c;
   --accent-ink: #ffffff;
   --chip: #f0ebe3;
   --danger: #b42318;
+  --shadow: 0 1px 2px rgb(28 27 26 / 6%), 0 4px 14px rgb(28 27 26 / 5%);
   --radius: 16px;
   --tabbar-h: 64px;
 }
 
+/* Dark: explicit choice, or system preference when the user hasn't picked light. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #141312;
+  --surface: #1e1c1a;
+  --text: #f3efe9;
+  --muted: #a8a299;
+  --border: #2e2b28;
+  --accent: #f26a3d;
+  --accent-ink: #1a0f0a;
+  --chip: #2a2724;
+  --danger: #f97066;
+  --shadow: none;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #141312;
     --surface: #1e1c1a;
     --text: #f3efe9;
-    --muted: #a09a92;
+    --muted: #a8a299;
     --border: #2e2b28;
+    --accent: #f26a3d;
+    --accent-ink: #1a0f0a;
     --chip: #2a2724;
     --danger: #f97066;
+    --shadow: none;
   }
 }
 
@@ -225,15 +246,35 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .lang-4 { background: #8b5cf6; }
 
 .readme {
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font: 0.85rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  line-height: 1.6;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 16px;
   margin: 10px 0 0;
 }
+.readme > :first-child { margin-top: 0; }
+.readme > :last-child { margin-bottom: 0; }
+.readme h1, .readme h2, .readme h3 { margin: 1.4em 0 0.5em; line-height: 1.25; }
+.readme h1 { font-size: 1.35rem; }
+.readme h2 { font-size: 1.15rem; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.readme h3 { font-size: 1rem; }
+.readme a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.readme img { max-width: 100%; height: auto; border-radius: 8px; }
+.readme pre {
+  overflow-x: auto;
+  background: var(--chip);
+  border-radius: 10px;
+  padding: 12px;
+  font: 0.82rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.readme pre code { background: none; padding: 0; }
+.readme ul, .readme ol { padding-left: 1.4em; }
+.readme blockquote { margin: 1em 0; padding-left: 14px; border-left: 3px solid var(--border); color: var(--muted); }
+.readme table { display: block; overflow-x: auto; border-collapse: collapse; }
+.readme th, .readme td { border: 1px solid var(--border); padding: 6px 10px; }
 
 .profile-card {
   display: flex;
@@ -290,4 +331,111 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   }
   .tab { flex-direction: row; gap: 6px; font-size: 0.9rem; padding: 0 12px; max-width: none; }
   .page { padding-bottom: 48px; }
+}
+
+/* ---- Theme toggle, topbar ---- */
+.topbar { justify-content: space-between; }
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 12px;
+  background: var(--chip);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.85rem;
+}
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -60px;
+  z-index: 50;
+  background: var(--text);
+  color: var(--bg);
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+.skip-link:focus { top: 8px; }
+
+/* ---- Cards and touch targets ---- */
+.repo-card, .tile, .profile-card { box-shadow: var(--shadow); }
+.repo-card-link:hover h3, .tile:hover h3 { color: var(--accent); }
+.bookmark-btn { min-width: 44px; min-height: 44px; justify-content: center; }
+.card-side select { min-height: 40px; }
+.chip { min-height: 36px; display: inline-flex; align-items: center; }
+.chip-sm { min-height: 28px; }
+.page > section h2 { margin-bottom: 4px; }
+
+/* ---- Filters, counts, links ---- */
+.filters { display: flex; flex-direction: column; margin-top: 4px; }
+.filters .chips { margin: 6px 0; }
+.result-count { margin: 12px 0 0; font-size: 0.9rem; }
+.result-count a, .muted a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.link-btn { background: none; border: 0; color: var(--muted); text-decoration: underline; padding: 6px; }
+.section-head a { padding: 6px 0; }
+
+/* ---- Notices (empty / error states) ---- */
+.notice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin: 12px 0;
+}
+.notice span { color: var(--muted); }
+.notice .actions { margin: 4px 0 0; }
+.error-box { border-style: solid; border-color: var(--danger); }
+.error-box strong { color: var(--danger); }
+
+/* ---- Ask ---- */
+.ask-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.hint { font-size: 0.8rem; margin: 0; }
+
+/* ---- Loading skeletons ---- */
+.skeleton {
+  background: linear-gradient(90deg, var(--chip) 25%, var(--border) 50%, var(--chip) 75%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-card { min-height: 90px; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* ---- Toast ---- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--tabbar-h) + 16px);
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - 32px);
+  background: var(--text);
+  color: var(--bg);
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+  animation: toast-in 0.18s ease-out;
+}
+.toast button { background: none; border: 0; color: inherit; font-weight: 700; text-decoration: underline; padding: 4px; }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  .toast { animation: none; }
+}
+
+@media (min-width: 900px) {
+  .tabbar { right: 130px; }
+  .topbar { padding-right: 16px; }
+  .toast { bottom: 24px; }
 }

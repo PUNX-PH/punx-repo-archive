@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { BookmarkButton } from "@/components/BookmarkButton";
+import { Readme } from "@/components/Readme";
 import { formatStars } from "@/components/RepoCard";
 import { getRepo } from "@/lib/github";
 
@@ -63,7 +64,7 @@ export default async function RepoPage({ params }: { params: Promise<{ owner: st
       {readme && (
         <section>
           <h2>README</h2>
-          <pre className="readme">{readme}</pre>
+          <Readme source={readme} owner={repo.owner} name={repo.name} />
         </section>
       )}
     </>

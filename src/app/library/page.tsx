@@ -55,7 +55,14 @@ export default function LibraryPage() {
         ))}
       </div>
 
-      {bookmarks.length === 0 && <p className="muted">No saves yet. Tap the bookmark on any repo to add it.</p>}
+      {bookmarks.length === 0 && (
+        <div className="notice">
+          <strong>Your library is empty</strong>
+          <span>Tap the bookmark on any repo to save it here. You can sort saves into your own lists.</span>
+          <Link className="btn primary" href="/search">Find repos</Link>
+        </div>
+      )}
+      {bookmarks.length > 0 && shown.length === 0 && <p className="muted">No saves match that filter.</p>}
 
       <div className="stack">
         {shown.map((b) => (

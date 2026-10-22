@@ -28,8 +28,12 @@ export function toRepo(r: any): Repo {
   };
 }
 
-export async function searchRepos(q: string, perPage = 20): Promise<Repo[]> {
-  const url = `${API}/search/repositories?q=${encodeURIComponent(q)}&per_page=${perPage}&sort=stars`;
+export type Sort = "best" | "stars" | "updated";
+
+// Without a sort, GitHub ranks by best match, which is what a typed query usually wants.
+export async function searchRepos(q: string, perPage = 20, sort: Sort = "best"): Promise<Repo[]> {
+  const sortParam = sort === "best" ? "" : `&sort=${sort}`;
+  const url = `${API}/search/repositories?q=${encodeURIComponent(q)}&per_page=${perPage}${sortParam}`;
   const res = await fetch(url, { headers: headers(), next: { revalidate: 300 } });
   if (!res.ok) throw new Error(`GitHub search failed (${res.status})`);
   const data = await res.json();
@@ -46,9 +50,11 @@ export async function getRepo(owner: string, name: string) {
     }),
     fetch(`${base}/languages`, { headers: headers(), next: { revalidate: 600 } }),
   ]);
-  if (!repoRes.ok) return null;
+  if (repoRes.status === 404) return null;
+  // Rate limits and outages are not "not found"; let the error page explain.
+  if (!repoRes.ok) throw new Error(`GitHub request failed (${repoRes.status})`);
   const repo = toRepo(await repoRes.json());
-  const readme = readmeRes.ok ? (await readmeRes.text()).slice(0, 6000) : "";
+  const readme = readmeRes.ok ? (await readmeRes.text()).slice(0, 15000) : "";
   const languages: Record<string, number> = langRes.ok ? await langRes.json() : {};
   return { repo, readme, languages };
 }

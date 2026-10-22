@@ -58,6 +58,8 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [ready, setReady] = useState(false);
   const merged = useRef<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; undo?: () => void } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const cloud = Boolean(user && db);
 
   useEffect(() => {
@@ -106,22 +108,39 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
     saveLocal(next);
   }, []);
 
+  const showToast = useCallback((message: string, undo?: () => void) => {
+    clearTimeout(toastTimer.current);
+    setToast({ message, undo });
+    toastTimer.current = setTimeout(() => setToast(null), 4500);
+  }, []);
+
   const toggle = useCallback(
-    async (repo: Repo) => {
+    async (repo: Repo): Promise<boolean> => {
       const isOn = saved.has(repo.fullName);
-      if (cloud && user && db) {
-        const ref = doc(db, "users", user.uid, "bookmarks", docId(repo.fullName));
-        if (isOn) await deleteDoc(ref);
-        else await setDoc(ref, { ...repo, list: DEFAULT_LIST, savedAt: Date.now() });
-      } else if (isOn) {
-        local(bookmarks.filter((b) => b.fullName !== repo.fullName));
-      } else {
-        local([{ ...repo, list: DEFAULT_LIST, savedAt: Date.now() }, ...bookmarks]);
+      try {
+        if (cloud && user && db) {
+          const ref = doc(db, "users", user.uid, "bookmarks", docId(repo.fullName));
+          if (isOn) await deleteDoc(ref);
+          else await setDoc(ref, { ...repo, list: DEFAULT_LIST, savedAt: Date.now() });
+        } else if (isOn) {
+          local(bookmarks.filter((b) => b.fullName !== repo.fullName));
+        } else {
+          local([{ ...repo, list: DEFAULT_LIST, savedAt: Date.now() }, ...bookmarks]);
+        }
+      } catch {
+        showToast("Couldn’t save that. Check your connection and try again.");
+        return false;
       }
+      showToast(
+        isOn ? `Removed ${repo.name}` : `Saved ${repo.name}${cloud ? "" : " to this browser"}`,
+        () => void toggleRef.current?.(repo),
+      );
       return true;
     },
-    [saved, cloud, user, bookmarks, local],
+    [saved, cloud, user, bookmarks, local, showToast],
   );
+  const toggleRef = useRef<(repo: Repo) => Promise<boolean>>(undefined);
+  toggleRef.current = toggle;
 
   const moveToList = useCallback(
     async (fullName: string, list: string) => {
@@ -156,7 +175,26 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
     [bookmarks, ready, isSaved, toggle, moveToList, replaceAll],
   );
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      {children}
+      {toast && (
+        <div className="toast" role="status" aria-live="polite">
+          <span>{toast.message}</span>
+          {toast.undo && (
+            <button
+              onClick={() => {
+                toast.undo?.();
+                setToast(null);
+              }}
+            >
+              Undo
+            </button>
+          )}
+        </div>
+      )}
+    </Ctx.Provider>
+  );
 }
 
 export function useBookmarks() {
