@@ -48,3 +48,15 @@ export const GoogleIcon = ({ size = 20 }: P) => (
     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
   </svg>
 );
+
+export const PencilIcon = ({ size = 18 }: P) => (
+  <svg {...base(size)}><path d="M4 20h4L19 9a2.8 2.800 0 00-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></svg>
+);
+
+export const TrashIcon = ({ size = 18 }: P) => (
+  <svg {...base(size)}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
+);
+
+export const GripIcon = ({ size = 18 }: P) => (
+  <svg {...base(size)}><circle cx="9" cy="6" r="1" /><circle cx="15" cy="6" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="9" cy="18" r="1" /><circle cx="15" cy="18" r="1" /></svg>
+);

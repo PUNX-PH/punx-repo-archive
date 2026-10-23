@@ -31,7 +31,7 @@ type BookmarksCtx = {
   ready: boolean;
   isSaved: (fullName: string) => boolean;
   toggle: (repo: Repo) => Promise<boolean>;
-  moveToFolder: (fullName: string, folder: string) => Promise<void>;
+  moveToFolder: (fullName: string, folder: string, quiet?: boolean) => Promise<void>;
   createFolder: (name: string) => Promise<string | null>;
   renameFolder: (from: string, to: string) => Promise<void>;
   deleteFolder: (name: string) => Promise<void>;
@@ -242,16 +242,33 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
   );
   toggleRef.current = toggle;
 
+  const moveRef = useRef<(fullName: string, folder: string, quiet?: boolean) => Promise<void>>(undefined);
+
+  // Used by the folder picker, drag and drop, and Undo. Confirms with a toast unless quiet.
   const moveToFolder = useCallback(
-    async (fullName: string, folder: string) => {
-      if (cloud && user && db) {
-        await updateDoc(doc(db, "users", user.uid, "bookmarks", docId(fullName)), { list: folder });
-      } else {
-        localBookmarks(bookmarks.map((b) => (b.fullName === fullName ? { ...b, list: folder } : b)));
+    async (fullName: string, folder: string, quiet = false) => {
+      const prev = bookmarks.find((b) => b.fullName === fullName);
+      if (!prev || sameName(prev.list, folder)) return;
+      try {
+        if (cloud && user && db) {
+          await updateDoc(doc(db, "users", user.uid, "bookmarks", docId(fullName)), { list: folder });
+        } else {
+          localBookmarks(bookmarks.map((b) => (b.fullName === fullName ? { ...b, list: folder } : b)));
+        }
+      } catch {
+        showToast({ message: "Couldn’t move that. Check your connection and try again." });
+        return;
+      }
+      if (!quiet) {
+        showToast({
+          message: `Moved ${prev.name} to ${folder}`,
+          undo: () => void moveRef.current?.(fullName, prev.list, true),
+        });
       }
     },
-    [cloud, user, bookmarks, localBookmarks],
+    [cloud, user, bookmarks, localBookmarks, showToast],
   );
+  moveRef.current = moveToFolder;
 
   // Returns the canonical name (an existing folder if the name matches one ignoring case), or null if blank.
   const createFolder = useCallback(
@@ -482,7 +499,6 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
           onPick={(f) => {
             void moveToFolder(pickerBookmark.fullName, f);
             setPickerFor(null);
-            showToast({ message: `Moved to ${f}` });
           }}
           onCreate={createFolder}
           onClose={() => setPickerFor(null)}

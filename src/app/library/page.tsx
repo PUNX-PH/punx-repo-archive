@@ -6,7 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 import { BookmarkButton } from "@/components/BookmarkButton";
 import { useBookmarks } from "@/components/BookmarksProvider";
 import { FolderIcon } from "@/components/FolderPicker";
-import { BookmarkIcon, ShareIcon, StarIcon } from "@/components/Icons";
+import { BookmarkIcon, PencilIcon, ShareIcon, StarIcon, TrashIcon } from "@/components/Icons";
 import { formatStars } from "@/components/RepoCard";
 import { ShareDialog } from "@/components/ShareDialog";
 import { SharedFolders } from "@/components/SharedFolders";
@@ -20,7 +20,7 @@ type Mode = "idle" | "new" | "rename" | "delete";
 function LibraryInner() {
   const {
     bookmarks, folders, ready, createFolder, renameFolder, deleteFolder, openFolderPicker,
-    canShare, shares, shareFolder, unshareFolder, sharedWithMe,
+    canShare, shares, shareFolder, unshareFolder, sharedWithMe, moveToFolder,
   } = useBookmarks();
   const params = useSearchParams();
   const wanted = params.get("folder");
@@ -31,6 +31,9 @@ function LibraryInner() {
   const [mode, setMode] = useState<Mode>("idle");
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Drag and drop: which repo is being dragged, and which folder tile it is hovering over.
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [over, setOver] = useState<string | null>(null);
 
   useEffect(() => {
     if (wanted) {
@@ -116,14 +119,34 @@ function LibraryInner() {
       ) : (
         <>
           <aside className="library-side">
-            <div className="folders" role="tablist" aria-label="Folders">
+            <div className={`folders${dragging ? " is-dragging" : ""}`} role="tablist" aria-label="Folders">
               <button role="tab" aria-selected={current === "All"} className={`folder-tile${current === "All" ? " is-active" : ""}`} onClick={() => { setActive("All"); reset(); }}>
                 <FolderIcon />
                 <span className="folder-name">All</span>
                 <span className="folder-count">{bookmarks.length}</span>
               </button>
               {folders.map((f) => (
-                <button key={f} role="tab" aria-selected={sameName(f, current)} className={`folder-tile${sameName(f, current) ? " is-active" : ""}`} onClick={() => { setActive(f); reset(); }}>
+                <button
+                  key={f}
+                  role="tab"
+                  aria-selected={sameName(f, current)}
+                  className={`folder-tile${sameName(f, current) ? " is-active" : ""}${over === f ? " is-over" : ""}`}
+                  onClick={() => { setActive(f); reset(); }}
+                  onDragOver={(e) => {
+                    if (!dragging) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    if (over !== f) setOver(f);
+                  }}
+                  onDragLeave={() => setOver((o) => (o === f ? null : o))}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const repo = e.dataTransfer.getData("text/plain") || dragging;
+                    setOver(null);
+                    setDragging(null);
+                    if (repo) void moveToFolder(repo, f);
+                  }}
+                >
                   <FolderIcon />
                   <span className="folder-name">{f}</span>
                   {shareOf(f) && (
@@ -189,12 +212,17 @@ function LibraryInner() {
                     <ShareIcon /> {currentShare ? "Shared" : "Share"}
                   </button>
                 )}
-                {editable && mode === "idle" && (
+                {editable && mode !== "rename" && mode !== "delete" && (
                   <>
-                    <button className="link-btn" onClick={() => { setMode("rename"); setDraft(current); setError(null); }}>Rename</button>
-                    <button className="link-btn" onClick={() => setMode("delete")}>Delete</button>
+                    <button className="btn btn-ghost" onClick={() => { setMode("rename"); setDraft(current); setError(null); }}>
+                      <PencilIcon size={16} /> Rename
+                    </button>
+                    <button className="btn btn-ghost btn-ghost-danger" onClick={() => { setMode("delete"); setError(null); }}>
+                      <TrashIcon size={16} /> Delete
+                    </button>
                   </>
                 )}
+                {current === DEFAULT_LIST && <span className="muted folder-note">Default folder</span>}
               </div>
             </div>
 
@@ -214,7 +242,15 @@ function LibraryInner() {
                   </form>
                 ) : (
                   <>
-                    <span className="muted">Delete “{current}”? {count(current) === 1 ? "Its 1 repo moves" : `Its ${count(current)} repos move`} back to {DEFAULT_LIST}.{currentShare && " Its share link stops working."}</span>
+                    <span className="muted">
+                      Delete “{current}”?{" "}
+                      {count(current) === 0
+                        ? "It’s empty."
+                        : count(current) === 1
+                          ? `Its 1 repo moves back to ${DEFAULT_LIST}.`
+                          : `Its ${count(current)} repos move back to ${DEFAULT_LIST}.`}
+                      {currentShare && " Its share link stops working."}
+                    </span>
                     <button
                       className="btn danger"
                       onClick={async () => {
@@ -243,6 +279,10 @@ function LibraryInner() {
               />
             )}
 
+            {bookmarks.length > 0 && folders.length > 1 && (
+              <p className="muted drag-tip">Tip: drag a repo onto a folder on the left to move it.</p>
+            )}
+
             {bookmarks.length === 0 && (
               <div className="notice">
                 <span className="notice-icon"><BookmarkIcon /></span>
@@ -257,10 +297,23 @@ function LibraryInner() {
 
             <div className="grid">
               {shown.map((b) => (
-                <article key={b.fullName} className="repo-card">
-                  <Link href={`/repo/${b.owner}/${b.name}`} className="repo-card-link">
+                <article
+                  key={b.fullName}
+                  className={`repo-card is-draggable${dragging === b.fullName ? " is-dragged" : ""}`}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData("text/plain", b.fullName);
+                    e.dataTransfer.effectAllowed = "move";
+                    setDragging(b.fullName);
+                  }}
+                  onDragEnd={() => {
+                    setDragging(null);
+                    setOver(null);
+                  }}
+                >
+                  <Link href={`/repo/${b.owner}/${b.name}`} className="repo-card-link" draggable={false}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={b.avatar} alt="" width={44} height={44} className="avatar" />
+                    <img src={b.avatar} alt="" width={44} height={44} className="avatar" draggable={false} />
                     <div className="repo-card-body">
                       <h3 translate="no"><span className="owner">{b.owner}/</span>{b.name}</h3>
                       <p className="desc">{b.description ?? "No description provided."}</p>
