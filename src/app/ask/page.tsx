@@ -26,6 +26,15 @@ function readAsks(): string[] {
   }
 }
 
+function forgetAsk(q: string): string[] {
+  const next = readAsks().filter((s) => s.toLowerCase() !== q.toLowerCase());
+  try {
+    if (next.length === 0) localStorage.removeItem(ASKS_KEY);
+    else localStorage.setItem(ASKS_KEY, JSON.stringify(next));
+  } catch {}
+  return next;
+}
+
 function rememberAsk(q: string) {
   try {
     const next = [q, ...readAsks().filter((s) => s.toLowerCase() !== q.toLowerCase())].slice(0, 5);
@@ -151,12 +160,15 @@ function Ask() {
                 setRecent([]);
               }}
             >
-              Clear
+              Clear all
             </button>
           </div>
           <div className="examples">
             {recent.map((r) => (
-              <button key={r} className="example" onClick={() => { setQuestion(r); ask(r); }}>{r}</button>
+              <div key={r} className="example-wrap">
+                <button className="example" onClick={() => { setQuestion(r); ask(r); }}>{r}</button>
+                <button className="example-x" onClick={() => setRecent(forgetAsk(r))} aria-label={`Remove “${r}” from recent questions`}>×</button>
+              </div>
             ))}
           </div>
         </section>

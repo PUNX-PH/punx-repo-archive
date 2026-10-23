@@ -6,7 +6,7 @@ import { useBookmarks } from "./BookmarksProvider";
 import { FolderIcon } from "./FolderPicker";
 import { ShareIcon } from "./Icons";
 import { ViewCount } from "./Views";
-import { sameName } from "@/lib/folders";
+import { inFolderOf, sameName } from "@/lib/folders";
 import { shareStatKey } from "@/lib/views";
 
 // The Library's "Shared" tab: folders you've shared, folders you could share, and folders
@@ -34,7 +34,7 @@ export function SharedFolders({
 
   // Folders with repos that aren't shared yet: one tap to share each.
   const shareable = folders
-    .map((f) => ({ name: f, count: bookmarks.filter((b) => sameName(b.list, f)).length }))
+    .map((f) => ({ name: f, count: bookmarks.filter((b) => inFolderOf(b, f)).length }))
     .filter((f) => f.count > 0 && !shares.some((s) => sameName(s.folder, f.name)));
 
   return (

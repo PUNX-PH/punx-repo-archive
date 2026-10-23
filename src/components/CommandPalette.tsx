@@ -2,11 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { inFolderOf } from "@/lib/folders";
 import { cycleTheme } from "@/lib/theme";
 import { useBookmarks } from "./BookmarksProvider";
-import { readRecentSearches } from "./RecentSearches";
+import { clearSearches, forgetSearch, readRecentSearches } from "./RecentSearches";
 
-type Item = { id: string; group: string; label: string; hint?: string; run: () => void };
+type Item = { id: string; group: string; label: string; hint?: string; run: () => void; onRemove?: () => void };
 
 const PAGES = [
   { href: "/", label: "Home" },
@@ -51,7 +52,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       out.push({ id: "search", group: "Search", label: `Search GitHub for “${query}”`, run: go(`/search?q=${enc}`) });
       out.push({ id: "ask", group: "Search", label: `Ask Claude: “${query}”`, run: go(`/ask?q=${enc}`) });
     } else {
-      recents.forEach((r) => out.push({ id: `recent-${r}`, group: "Recent searches", label: r, run: go(`/search?q=${encodeURIComponent(r)}`) }));
+      recents.forEach((r) =>
+        out.push({
+          id: `recent-${r}`,
+          group: "Recent searches",
+          label: r,
+          run: go(`/search?q=${encodeURIComponent(r)}`),
+          onRemove: () => setRecents(forgetSearch(r).slice(0, 4)),
+        }),
+      );
     }
 
     PAGES.filter((p) => match(p.label)).forEach((p) => out.push({ id: p.href, group: "Go to", label: p.label, run: go(p.href) }));
@@ -59,7 +68,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     folders
       .filter((f) => match(f))
       .forEach((f) => {
-        const n = bookmarks.filter((b) => b.list.toLowerCase() === f.toLowerCase()).length;
+        const n = bookmarks.filter((b) => inFolderOf(b, f)).length;
         out.push({ id: `folder-${f}`, group: "Folders", label: `Open folder “${f}”`, hint: `${n} repo${n === 1 ? "" : "s"}`, run: go(`/library?folder=${encodeURIComponent(f)}`) });
       });
 
@@ -87,6 +96,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setIdx((i) => (items.length ? (i - 1 + items.length) % items.length : 0));
+    } else if ((e.key === "Delete" || (e.key === "Backspace" && !q)) && items[idx]?.onRemove) {
+      e.preventDefault();
+      items[idx].onRemove?.();
     } else if (e.key === "Enter") {
       e.preventDefault();
       run(items[idx]);
@@ -124,7 +136,14 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             lastGroup = it.group;
             return (
               <li key={it.id} role="presentation">
-                {header && <div className="palette-group">{it.group}</div>}
+                {header && (
+                  <div className="palette-group">
+                    <span>{it.group}</span>
+                    {it.group === "Recent searches" && (
+                      <button className="palette-clear" onClick={() => { clearSearches(); setRecents([]); }}>Clear all</button>
+                    )}
+                  </div>
+                )}
                 <div
                   id={`palette-${it.id}`}
                   role="option"
@@ -133,8 +152,20 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   onMouseMove={() => setIdx(i)}
                   onClick={() => run(it)}
                 >
-                  <span>{it.label}</span>
+                  <span className="palette-label">{it.label}</span>
                   {it.hint && <span className="muted">{it.hint}</span>}
+                  {it.onRemove && (
+                    <button
+                      className="palette-x"
+                      aria-label={`Remove “${it.label}” from recent searches`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        it.onRemove?.();
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               </li>
             );

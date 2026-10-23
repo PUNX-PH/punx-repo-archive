@@ -16,7 +16,7 @@ type Result = { added: number; already: number; missing: string[]; failed: strin
 // Library > Import repos: paste GitHub links or owner/name (or upload a CSV) and save them all to a folder.
 export function ImportDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
-  const { bookmarks, folders, saveMany } = useBookmarks();
+  const { folders, saveMany } = useBookmarks();
   const ref = useRef<HTMLDialogElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
@@ -82,9 +82,10 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       setProgress(Math.min(usable.length, i + CHUNK));
     }
 
-    const have = new Set(bookmarks.map((b) => b.fullName.toLowerCase()));
-    const already = got.filter((r) => have.has(r.fullName.toLowerCase())).length;
-    const added = got.length > 0 ? await saveMany(got, folderName) : 0;
+    // New repos are saved; ones you already had are also added to this folder. The rest were already in it.
+    const { created, linked } = got.length > 0 ? await saveMany(got, folderName) : { created: 0, linked: 0 };
+    const added = created + linked;
+    const already = got.length - added;
 
     // Anything we couldn't check stays in the box, so Import can simply be pressed again.
     setText(failed.join("\n"));
@@ -179,7 +180,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
           <div className="import-result" role="status">
             <p style={{ margin: 0 }}>
               <CheckIcon size={16} /> <strong>{result.added} repo{result.added === 1 ? "" : "s"}</strong> saved to “{result.folder}”.
-              {result.already > 0 && ` ${result.already} ${result.already === 1 ? "was" : "were"} already in your library.`}
+              {result.already > 0 && ` ${result.already} ${result.already === 1 ? "was" : "were"} already in this folder.`}
             </p>
             {result.missing.length > 0 && (
               <p className="muted" style={{ margin: "6px 0 0" }}>

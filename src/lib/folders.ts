@@ -16,3 +16,32 @@ export function validateFolderName(name: string, existing: string[], ignore?: st
   if (existing.some((e) => sameName(e, n) && !(ignore && sameName(e, ignore)))) return "You already have a folder with that name.";
   return null;
 }
+
+// ---- A saved repo can live in several folders ----
+// Older saves only have one `list`; newer ones have `lists`. Always read folders through these helpers.
+
+type HasLists = { list?: string; lists?: string[] };
+
+/** Every folder a saved repo is in (never empty: falls back to the default folder). */
+export function listsOf(b: HasLists): string[] {
+  if (b.lists && b.lists.length > 0) return b.lists;
+  return [b.list || DEFAULT_LIST];
+}
+
+export const inFolderOf = (b: HasLists, folder: string) => listsOf(b).some((l) => sameName(l, folder));
+
+export const withFolder = (lists: string[], folder: string) => (lists.some((l) => sameName(l, folder)) ? lists : [...lists, folder]);
+
+export const withoutFolder = (lists: string[], folder: string) => lists.filter((l) => !sameName(l, folder));
+
+/** Case-insensitive de-duplication that keeps first spellings and order. */
+export function uniqueFolders(lists: string[]): string[] {
+  const out: string[] = [];
+  for (const l of lists) if (l.trim() && !out.some((o) => sameName(o, l))) out.push(l);
+  return out;
+}
+
+/** Short label for a card: "Java" or "Java +2". */
+export function folderLabel(lists: string[]): string {
+  return lists.length <= 1 ? (lists[0] ?? DEFAULT_LIST) : `${lists[0]} +${lists.length - 1}`;
+}

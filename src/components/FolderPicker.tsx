@@ -6,14 +6,15 @@ import { FOLDER_SUGGESTIONS, MAX_FOLDER_NAME, sameName, validateFolderName } fro
 type Props = {
   repoName: string;
   folders: string[];
-  current: string;
-  onPick: (folder: string) => void;
+  /** The folders this repo is in now. */
+  current: string[];
+  onToggle: (folder: string, on: boolean) => void;
   onCreate: (name: string) => Promise<string | null>;
   onClose: () => void;
 };
 
-// A modal for choosing (or creating) the folder a saved repo lives in.
-export function FolderPicker({ repoName, folders, current, onPick, onCreate, onClose }: Props) {
+// Choose which folders a saved repo lives in. Tick as many as you like; it stays in at least one.
+export function FolderPicker({ repoName, folders, current, onToggle, onCreate, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,35 +26,48 @@ export function FolderPicker({ repoName, folders, current, onPick, onCreate, onC
     if (d && !d.open) d.showModal();
   }, []);
 
+  const isIn = (f: string) => current.some((c) => sameName(c, f));
+  const onlyOne = current.length <= 1;
+
   async function create(value: string) {
     const err = validateFolderName(value, folders);
     if (err) return setError(err);
     const made = await onCreate(value.trim());
-    if (made) onPick(made);
+    if (made) {
+      onToggle(made, true);
+      setName("");
+    }
   }
 
   const suggestions = folders.length <= 3 ? FOLDER_SUGGESTIONS.filter((s) => !folders.some((f) => sameName(f, s))) : [];
 
   return (
-    <dialog ref={ref} className="folder-dialog" onClose={onClose} onClick={(e) => e.target === ref.current && onClose()} aria-label={`Choose a folder for ${repoName}`}>
+    <dialog ref={ref} className="folder-dialog" onClose={onClose} onClick={(e) => e.target === ref.current && onClose()} aria-label={`Choose folders for ${repoName}`}>
       <div className="folder-dialog-body">
         <div className="section-head">
-          <h2>Save to folder</h2>
+          <h2>Save to folders</h2>
           <button className="link-btn" onClick={onClose}>Done</button>
         </div>
-        <p className="muted folder-dialog-sub">{repoName}</p>
+        <p className="muted folder-dialog-sub" translate="no">{repoName}</p>
 
-        <ul className="folder-options">
-          {folders.map((f) => (
-            <li key={f}>
-              <button className={`folder-option${sameName(f, current) ? " is-current" : ""}`} onClick={() => onPick(f)} aria-pressed={sameName(f, current)}>
-                <FolderIcon />
-                <span>{f}</span>
-                {sameName(f, current) && <span aria-hidden="true">✓</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <fieldset className="folder-checks">
+          <legend className="sr-only">Folders for {repoName}</legend>
+          {folders.map((f) => {
+            const checked = isIn(f);
+            const locked = checked && onlyOne;
+            return (
+              <label
+                key={f}
+                className={`folder-check${checked ? " is-checked" : ""}${locked ? " is-locked" : ""}`}
+                title={locked ? "A saved repo stays in at least one folder. Use the bookmark to remove it." : undefined}
+              >
+                <input type="checkbox" checked={checked} disabled={locked} onChange={(e) => onToggle(f, e.target.checked)} />
+                <span className="folder-check-name">{f}</span>
+              </label>
+            );
+          })}
+        </fieldset>
+        {onlyOne && <p className="muted folder-dialog-hint">It stays in at least one folder. Use the bookmark button to remove it from your library.</p>}
 
         {suggestions.length > 0 && (
           <div className="chips">
@@ -83,7 +97,7 @@ export function FolderPicker({ repoName, folders, current, onPick, onCreate, onC
             spellCheck={false}
             aria-invalid={Boolean(error)}
           />
-          <button className="btn" type="submit">Create</button>
+          <button className="btn" type="submit">Create and add</button>
         </form>
         {error && <p className="error" role="alert">{error}</p>}
       </div>

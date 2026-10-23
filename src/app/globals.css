@@ -766,3 +766,84 @@ kbd { font-family: var(--font-mono); font-size: 0.72rem; padding: 2px 6px; backg
 .import-dest input { flex: 1 1 160px; }
 .import-result { padding: 12px 14px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border)); border-radius: var(--radius-sm); font-size: 0.92rem; }
 .import-result svg { vertical-align: -3px; color: var(--accent); }
+
+/* ============ Narrow screens: give card text the room ============ */
+@media (max-width: 520px) {
+  /* Library cards: the folder button drops under the text instead of squeezing the name into a sliver. */
+  .repo-card { flex-wrap: wrap; }
+  .repo-card-link { flex: 1 1 calc(100% - 52px); }
+  .repo-card .card-side { display: contents; }
+  .repo-card .card-side .bookmark-btn { order: 2; }
+  .repo-card .card-side .folder-btn { order: 3; margin-left: 56px; max-width: calc(100% - 56px); }
+}
+
+/* ============ Folder picker checkboxes ============ */
+.folder-checks { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; overscroll-behavior: contain; }
+.folder-check { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
+.folder-check:hover { border-color: color-mix(in srgb, var(--text) 35%, var(--border)); }
+.folder-check.is-checked { border-color: var(--accent); background: var(--accent-soft); }
+.folder-check.is-locked { cursor: default; }
+.folder-check input { width: 20px; height: 20px; flex: none; margin: 0; padding: 0; accent-color: var(--accent); cursor: inherit; }
+.folder-check-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.folder-dialog-hint { margin: -2px 0 0; font-size: 0.82rem; }
+
+/* ============ Folder picker checkboxes ============ */
+.folder-checks { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow-y: auto; overscroll-behavior: contain; }
+.folder-check { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: border-color 0.12s ease, background 0.12s ease; }
+.folder-check:hover { border-color: color-mix(in srgb, var(--text) 35%, var(--border)); }
+.folder-check.is-checked { border-color: var(--accent); background: var(--accent-soft); }
+.folder-check.is-locked { cursor: default; }
+.folder-check input { width: 20px; height: 20px; flex: none; margin: 0; padding: 0; accent-color: var(--accent); cursor: inherit; }
+.folder-check-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.folder-dialog-hint { margin: -2px 0 0; font-size: 0.82rem; }
+
+/* ============ Removing recent items ============ */
+.chip-removable { display: inline-flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; max-width: 100%; }
+.chip-removable .chip { flex: 0 1 auto; border: 0; background: transparent; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
+.chip-x, .palette-x, .example-x { background: none; border: 0; color: var(--muted); border-radius: 999px; line-height: 1; font-size: 1.1rem; }
+.chip-x { padding: 0 12px 0 6px; min-width: 36px; }
+.chip-x:hover, .palette-x:hover, .example-x:hover { color: var(--danger); }
+
+.example-wrap { position: relative; display: flex; }
+.example-wrap .example { flex: 1; padding-right: 44px; overflow-wrap: anywhere; }
+.example-x { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; }
+
+.palette-group { display: flex; align-items: center; justify-content: space-between; }
+.palette-clear { background: none; border: 0; color: var(--muted); font-size: 0.78rem; text-transform: none; letter-spacing: 0; text-decoration: underline; padding: 4px; }
+.palette-clear:hover { color: var(--text); }
+.palette-label { flex: 1; min-width: 0; }
+.palette-x { flex: none; width: 32px; height: 32px; opacity: 0; }
+.palette-item:hover .palette-x, .palette-item.is-active .palette-x, .palette-x:focus-visible { opacity: 1; }
+@media (hover: none) { .palette-x { opacity: 1; } }
+
+/* ============ Long names never stretch their box ============ */
+h1, h2, h3 { overflow-wrap: anywhere; }
+.section-head > * { min-width: 0; }
+.section-head h2 { flex: 1; }
+.profile-card strong, .shared-item strong, .quick strong, .notice strong, .answer strong, .toast span { overflow-wrap: anywhere; }
+
+/* Pills and buttons wrap long names instead of outgrowing the screen (scrolling strips keep their sideways scroll). */
+.chips:not(.scroll) .chip, .meta .chip, .chip-removable { max-width: 100%; }
+.chips:not(.scroll) .chip, .meta .chip { flex: 0 1 auto; min-width: 0; overflow-wrap: anywhere; line-height: 1.25; padding-top: 5px; padding-bottom: 5px; }
+.btn { max-width: 100%; overflow-wrap: anywhere; text-align: center; }
+
+/* Hidden labels (sr-only) inside a scrolling strip must stay inside it, or they widen the whole page. */
+.folders, .chips.scroll, .carousel, .segmented { position: relative; }
+
+/* Long folder names in inline confirmations wrap instead of pushing the page wider. */
+.folder-bar span { min-width: 0; overflow-wrap: anywhere; }
+
+/* The toast sizes to its text (up to the screen width) instead of being squeezed into half the screen. */
+.toast { width: max-content; max-width: calc(100vw - 32px); }
+
+/* Theme cards stack on small phones so their text isn't squeezed into thin columns. */
+@media (max-width: 520px) {
+  .choice-grid { grid-template-columns: minmax(0, 1fr); }
+  .choice { display: grid; grid-template-columns: 76px minmax(0, 1fr); column-gap: 12px; row-gap: 0; align-items: center; }
+  .choice-preview { grid-row: 1 / 3; width: 76px; height: 50px; margin: 0; }
+}
+
+/* Body text and the repo/folder header never push past their column on long unbroken strings. */
+p, li { overflow-wrap: break-word; }
+.repo-hero > * { min-width: 0; }
+.answer-text { overflow-wrap: anywhere; }

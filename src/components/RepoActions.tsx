@@ -6,6 +6,7 @@ import { BookmarkButton } from "./BookmarkButton";
 import { useBookmarks } from "./BookmarksProvider";
 import { FolderIcon } from "./FolderPicker";
 import { CheckIcon, ShareIcon } from "./Icons";
+import { folderLabel, listsOf } from "@/lib/folders";
 
 // The row of things you do with a repo: save it, file it, send it to a teammate, open it on GitHub.
 export function RepoActions({ repo }: { repo: Repo }) {
@@ -27,8 +28,8 @@ export function RepoActions({ repo }: { repo: Repo }) {
     <div className="actions">
       <BookmarkButton repo={repo} label />
       {saved && (
-        <button className="btn" onClick={() => openFolderPicker(repo.fullName)} aria-label={`Change folder. Currently in ${saved.list}.`}>
-          <FolderIcon /> {saved.list}
+        <button className="btn" onClick={() => openFolderPicker(repo.fullName)} aria-label={`Change folders. Currently in ${listsOf(saved).join(", ")}.`} title={listsOf(saved).join(", ")}>
+          <FolderIcon /> <span className="btn-label">{folderLabel(listsOf(saved))}</span>
         </button>
       )}
       <button className="btn" onClick={copyLink}>

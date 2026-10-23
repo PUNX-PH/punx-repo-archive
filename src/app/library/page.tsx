@@ -12,7 +12,7 @@ import { formatStars } from "@/components/RepoCard";
 import { ShareDialog } from "@/components/ShareDialog";
 import { SharedFolders } from "@/components/SharedFolders";
 import { ViewCount } from "@/components/Views";
-import { DEFAULT_LIST, FOLDER_SUGGESTIONS, MAX_FOLDER_NAME, sameName, validateFolderName } from "@/lib/folders";
+import { DEFAULT_LIST, FOLDER_SUGGESTIONS, MAX_FOLDER_NAME, folderLabel, inFolderOf, listsOf, sameName, validateFolderName, withFolder, withoutFolder } from "@/lib/folders";
 import { languageColor } from "@/lib/languages";
 import { shareStatKey } from "@/lib/views";
 
@@ -21,7 +21,7 @@ type Mode = "idle" | "new" | "rename" | "delete";
 function LibraryInner() {
   const {
     bookmarks, folders, ready, createFolder, renameFolder, deleteFolder, openFolderPicker,
-    canShare, shares, shareFolder, unshareFolder, sharedWithMe, moveToFolder,
+    canShare, shares, shareFolder, unshareFolder, sharedWithMe, setFolders,
   } = useBookmarks();
   const params = useSearchParams();
   const wanted = params.get("folder");
@@ -58,7 +58,7 @@ function LibraryInner() {
     );
   }
 
-  const count = (f: string) => bookmarks.filter((b) => sameName(b.list, f)).length;
+  const count = (f: string) => bookmarks.filter((b) => inFolderOf(b, f)).length;
   const shareOf = (f: string) => shares.find((s) => sameName(s.folder, f));
   const current = active === "All" || folders.some((f) => sameName(f, active)) ? active : "All";
   const editable = current !== "All" && current !== DEFAULT_LIST;
@@ -67,9 +67,20 @@ function LibraryInner() {
 
   const shown = bookmarks.filter(
     (b) =>
-      (current === "All" || sameName(b.list, current)) &&
+      (current === "All" || inFolderOf(b, current)) &&
       (!filter || `${b.fullName} ${b.description ?? ""}`.toLowerCase().includes(filter.toLowerCase())),
   );
+
+  // Dropping a repo on a folder: from a folder's own view it moves (leaves this folder); from All it just adds.
+  // Hold Alt (Option) or Ctrl to add it without leaving the current folder.
+  function dropOnFolder(fullName: string, target: string, copy: boolean) {
+    const b = bookmarks.find((x) => x.fullName === fullName);
+    if (!b) return;
+    const now = listsOf(b);
+    const moving = current !== "All" && !copy && !sameName(current, target);
+    const next = withFolder(moving ? withoutFolder(now, current) : now, target);
+    void setFolders(fullName, next, { message: moving ? `Moved ${b.name} to ${target}` : `Added ${b.name} to ${target}` });
+  }
 
   function reset() {
     setMode("idle");
@@ -152,7 +163,7 @@ function LibraryInner() {
                     const repo = e.dataTransfer.getData("text/plain") || dragging;
                     setOver(null);
                     setDragging(null);
-                    if (repo) void moveToFolder(repo, f);
+                    if (repo) dropOnFolder(repo, f, e.altKey || e.ctrlKey || e.metaKey);
                   }}
                 >
                   <FolderIcon />
@@ -288,7 +299,7 @@ function LibraryInner() {
             )}
 
             {bookmarks.length > 0 && folders.length > 1 && (
-              <p className="muted drag-tip">Tip: drag a repo onto a folder on the left to move it.</p>
+              <p className="muted drag-tip">Tip: drag a repo onto a folder to move it. Hold Alt to add it without leaving this one.</p>
             )}
 
             {bookmarks.length === 0 && (
@@ -335,9 +346,9 @@ function LibraryInner() {
                   </Link>
                   <div className="card-side">
                     <BookmarkButton repo={b} />
-                    <button className="folder-btn" onClick={() => openFolderPicker(b.fullName)} aria-label={`Move ${b.fullName} to a folder. Currently in ${b.list}.`}>
+                    <button className="folder-btn" onClick={() => openFolderPicker(b.fullName)} aria-label={`Choose folders for ${b.fullName}. Currently in ${listsOf(b).join(", ")}.`} title={listsOf(b).join(", ")}>
                       <FolderIcon />
-                      <span>{b.list}</span>
+                      <span>{folderLabel(listsOf(b))}</span>
                     </button>
                   </div>
                 </article>

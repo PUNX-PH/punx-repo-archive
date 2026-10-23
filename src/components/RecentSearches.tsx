@@ -14,11 +14,26 @@ export function readRecentSearches(): string[] {
   }
 }
 
-export function rememberSearch(q: string) {
+function write(list: string[]) {
   try {
-    const next = [q, ...readRecentSearches().filter((s) => s.toLowerCase() !== q.toLowerCase())].slice(0, 6);
-    localStorage.setItem(KEY, JSON.stringify(next));
+    if (list.length === 0) localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, JSON.stringify(list));
   } catch {}
+}
+
+export function rememberSearch(q: string) {
+  write([q, ...readRecentSearches().filter((s) => s.toLowerCase() !== q.toLowerCase())].slice(0, 6));
+}
+
+/** Removes one recent search. Returns what's left. */
+export function forgetSearch(q: string): string[] {
+  const next = readRecentSearches().filter((s) => s.toLowerCase() !== q.toLowerCase());
+  write(next);
+  return next;
+}
+
+export function clearSearches() {
+  write([]);
 }
 
 export function RecentSearches() {
@@ -35,18 +50,19 @@ export function RecentSearches() {
         <button
           className="link-btn"
           onClick={() => {
-            try {
-              localStorage.removeItem(KEY);
-            } catch {}
+            clearSearches();
             setItems([]);
           }}
         >
-          Clear
+          Clear all
         </button>
       </div>
       <div className="chips">
         {items.map((s) => (
-          <Link key={s} href={`/search?q=${encodeURIComponent(s)}`} className="chip">{s}</Link>
+          <span key={s} className="chip-removable">
+            <Link href={`/search?q=${encodeURIComponent(s)}`} className="chip">{s}</Link>
+            <button className="chip-x" onClick={() => setItems(forgetSearch(s))} aria-label={`Remove “${s}” from recent searches`}>×</button>
+          </span>
         ))}
       </div>
     </section>

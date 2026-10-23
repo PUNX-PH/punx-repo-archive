@@ -13,7 +13,10 @@ export type Repo = {
 };
 
 export type Bookmark = Repo & {
+  /** The first folder. Kept for older saved data; `lists` is the full set. */
   list: string;
+  /** Every folder this repo is in. Older saves only have `list`, so read through listsOf(). */
+  lists?: string[];
   savedAt: number;
 };
 

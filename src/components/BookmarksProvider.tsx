@@ -15,7 +15,7 @@ import {
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { PREVIEW_MODE } from "@/lib/domain";
 import { db } from "@/lib/firebase";
-import { DEFAULT_LIST, sameName } from "@/lib/folders";
+import { DEFAULT_LIST, inFolderOf, listsOf, sameName, uniqueFolders, withFolder, withoutFolder } from "@/lib/folders";
 import { MAX_SHARED_REPOS, newShareId, signature, toSharedRepo } from "@/lib/share";
 import type { Bookmark, Repo, Share, SharedWithMe } from "@/lib/types";
 import { useAuth } from "./AuthProvider";
@@ -31,14 +31,18 @@ type BookmarksCtx = {
   ready: boolean;
   isSaved: (fullName: string) => boolean;
   toggle: (repo: Repo) => Promise<boolean>;
-  moveToFolder: (fullName: string, folder: string, quiet?: boolean) => Promise<void>;
+  /** Replaces the set of folders a saved repo is in. Never leaves it in none (it falls back to the default folder). */
+  setFolders: (fullName: string, next: string[], opts?: { message?: string; quiet?: boolean }) => Promise<void>;
   createFolder: (name: string) => Promise<string | null>;
   renameFolder: (from: string, to: string) => Promise<void>;
   deleteFolder: (name: string) => Promise<void>;
   openFolderPicker: (fullName: string) => void;
   replaceAll: (next: Bookmark[]) => Promise<void>;
-  /** Saves repos that aren't saved yet into a folder (created if needed; the default folder if omitted). Returns how many were new. */
-  saveMany: (repos: Repo[], folder?: string) => Promise<number>;
+  /**
+   * Saves repos into a folder (created if needed; the default folder if omitted). New repos are saved;
+   * repos you already have are also added to that folder when one is named.
+   */
+  saveMany: (repos: Repo[], folder?: string) => Promise<{ created: number; linked: number }>;
   /** True when signed in, which is required to share. */
   canShare: boolean;
   /** The user's active shares, one per shared folder. */
@@ -189,7 +193,7 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
       if (n.trim() && !out.some((o) => sameName(o, n))) out.push(n);
     };
     folderNames.forEach(add);
-    [...new Set(bookmarks.map((b) => b.list))].sort((a, b) => a.localeCompare(b)).forEach(add);
+    [...new Set(bookmarks.flatMap(listsOf))].sort((a, b) => a.localeCompare(b)).forEach(add);
     return out;
   }, [folderNames, bookmarks]);
 
@@ -214,18 +218,36 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
 
   const toggleRef = useRef<(repo: Repo) => Promise<boolean>>(undefined);
 
+  const restoreRef = useRef<(b: Bookmark) => Promise<void>>(undefined);
+
+  // Puts a removed bookmark back exactly as it was, folders included (used by Undo).
+  const restoreBookmark = useCallback(
+    async (b: Bookmark) => {
+      try {
+        if (cloud && user && db) await setDoc(doc(db, "users", user.uid, "bookmarks", docId(b.fullName)), b);
+        else localBookmarks([b, ...bookmarks.filter((x) => x.fullName !== b.fullName)]);
+      } catch {
+        showToast({ message: "Couldn’t restore that. Check your connection and try again." });
+      }
+    },
+    [cloud, user, bookmarks, localBookmarks, showToast],
+  );
+  restoreRef.current = restoreBookmark;
+
   const toggle = useCallback(
     async (repo: Repo): Promise<boolean> => {
-      const isOn = saved.has(repo.fullName);
+      const prev = bookmarks.find((b) => b.fullName === repo.fullName);
+      const isOn = Boolean(prev);
+      const row: Bookmark = { ...repo, list: DEFAULT_LIST, lists: [DEFAULT_LIST], savedAt: Date.now() };
       try {
         if (cloud && user && db) {
           const ref = doc(db, "users", user.uid, "bookmarks", docId(repo.fullName));
           if (isOn) await deleteDoc(ref);
-          else await setDoc(ref, { ...repo, list: DEFAULT_LIST, savedAt: Date.now() });
+          else await setDoc(ref, row);
         } else if (isOn) {
           localBookmarks(bookmarks.filter((b) => b.fullName !== repo.fullName));
         } else {
-          localBookmarks([{ ...repo, list: DEFAULT_LIST, savedAt: Date.now() }, ...bookmarks]);
+          localBookmarks([row, ...bookmarks]);
         }
       } catch {
         showToast({ message: "Couldn’t save that. Check your connection and try again." });
@@ -233,42 +255,47 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
       }
       showToast({
         message: isOn ? `Removed ${repo.name}` : `Saved ${repo.name}${cloud ? "" : " to this browser"}`,
-        undo: () => void toggleRef.current?.(repo),
+        // Undoing a removal restores its folders; undoing a save removes it again.
+        undo: isOn && prev ? () => void restoreRef.current?.(prev) : () => void toggleRef.current?.(repo),
         folderFor: isOn ? undefined : repo.fullName,
       });
       return true;
     },
-    [saved, cloud, user, bookmarks, localBookmarks, showToast],
+    [cloud, user, bookmarks, localBookmarks, showToast],
   );
   toggleRef.current = toggle;
 
-  const moveRef = useRef<(fullName: string, folder: string, quiet?: boolean) => Promise<void>>(undefined);
+  const setFoldersRef = useRef<BookmarksCtx["setFolders"]>(undefined);
 
-  // Used by the folder picker, drag and drop, and Undo. Confirms with a toast unless quiet.
-  const moveToFolder = useCallback(
-    async (fullName: string, folder: string, quiet = false) => {
+  // The one way a repo's folders change: the picker's checkboxes, drag and drop, and Undo.
+  const setFolders = useCallback<BookmarksCtx["setFolders"]>(
+    async (fullName, next, opts = {}) => {
       const prev = bookmarks.find((b) => b.fullName === fullName);
-      if (!prev || sameName(prev.list, folder)) return;
+      if (!prev) return;
+      const before = listsOf(prev);
+      const after = uniqueFolders(next).length > 0 ? uniqueFolders(next) : [DEFAULT_LIST];
+      const same = before.length === after.length && before.every((l) => after.some((a) => sameName(a, l)));
+      if (same) return;
       try {
         if (cloud && user && db) {
-          await updateDoc(doc(db, "users", user.uid, "bookmarks", docId(fullName)), { list: folder });
+          await updateDoc(doc(db, "users", user.uid, "bookmarks", docId(fullName)), { lists: after, list: after[0] });
         } else {
-          localBookmarks(bookmarks.map((b) => (b.fullName === fullName ? { ...b, list: folder } : b)));
+          localBookmarks(bookmarks.map((b) => (b.fullName === fullName ? { ...b, lists: after, list: after[0] } : b)));
         }
       } catch {
-        showToast({ message: "Couldn’t move that. Check your connection and try again." });
+        showToast({ message: "Couldn’t update folders. Check your connection and try again." });
         return;
       }
-      if (!quiet) {
+      if (!opts.quiet) {
         showToast({
-          message: `Moved ${prev.name} to ${folder}`,
-          undo: () => void moveRef.current?.(fullName, prev.list, true),
+          message: opts.message ?? `Updated folders for ${prev.name}`,
+          undo: () => void setFoldersRef.current?.(fullName, before, { quiet: true }),
         });
       }
     },
     [cloud, user, bookmarks, localBookmarks, showToast],
   );
-  moveRef.current = moveToFolder;
+  setFoldersRef.current = setFolders;
 
   // Returns the canonical name (an existing folder if the name matches one ignoring case), or null if blank.
   const createFolder = useCallback(
@@ -296,7 +323,9 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
         batch.delete(doc(db, "users", user.uid, "folders", folderDocId(from)));
         batch.set(doc(db, "users", user.uid, "folders", folderDocId(next)), { name: next, createdAt: Date.now() });
         for (const b of bookmarks) {
-          if (sameName(b.list, from)) batch.update(doc(db, "users", user.uid, "bookmarks", docId(b.fullName)), { list: next });
+          if (!inFolderOf(b, from)) continue;
+          const lists = uniqueFolders(listsOf(b).map((l) => (sameName(l, from) ? next : l)));
+          batch.update(doc(db, "users", user.uid, "bookmarks", docId(b.fullName)), { lists, list: lists[0] });
         }
         // Keep a shared link's title in step with the folder name.
         for (const s of shares) {
@@ -305,7 +334,13 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
         await batch.commit();
       } else {
         localFolders(folderNames.some((f) => sameName(f, from)) ? folderNames.map((f) => (sameName(f, from) ? next : f)) : [...folderNames, next]);
-        localBookmarks(bookmarks.map((b) => (sameName(b.list, from) ? { ...b, list: next } : b)));
+        localBookmarks(
+          bookmarks.map((b) => {
+            if (!inFolderOf(b, from)) return b;
+            const lists = uniqueFolders(listsOf(b).map((l) => (sameName(l, from) ? next : l)));
+            return { ...b, lists, list: lists[0] };
+          }),
+        );
       }
     },
     [cloud, user, bookmarks, folderNames, shares, localFolders, localBookmarks],
@@ -319,7 +354,11 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
         const batch = writeBatch(db);
         batch.delete(doc(db, "users", user.uid, "folders", folderDocId(name)));
         for (const b of bookmarks) {
-          if (sameName(b.list, name)) batch.update(doc(db, "users", user.uid, "bookmarks", docId(b.fullName)), { list: DEFAULT_LIST });
+          if (!inFolderOf(b, name)) continue;
+          // Leaves only this folder; a repo that was in no other folder falls back to the default.
+          const rest = withoutFolder(listsOf(b), name);
+          const lists = rest.length > 0 ? rest : [DEFAULT_LIST];
+          batch.update(doc(db, "users", user.uid, "bookmarks", docId(b.fullName)), { lists, list: lists[0] });
         }
         // A deleted folder's public link stops working.
         for (const s of shares) {
@@ -328,14 +367,21 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
         await batch.commit();
       } else {
         localFolders(folderNames.filter((f) => !sameName(f, name)));
-        localBookmarks(bookmarks.map((b) => (sameName(b.list, name) ? { ...b, list: DEFAULT_LIST } : b)));
+        localBookmarks(
+          bookmarks.map((b) => {
+            if (!inFolderOf(b, name)) return b;
+            const rest = withoutFolder(listsOf(b), name);
+            const lists = rest.length > 0 ? rest : [DEFAULT_LIST];
+            return { ...b, lists, list: lists[0] };
+          }),
+        );
       }
     },
     [cloud, user, bookmarks, folderNames, shares, localFolders, localBookmarks],
   );
 
   const inFolder = useCallback(
-    (folder: string) => bookmarks.filter((b) => sameName(b.list, folder)).map(toSharedRepo),
+    (folder: string) => bookmarks.filter((b) => inFolderOf(b, folder)).map(toSharedRepo),
     [bookmarks],
   );
 
@@ -398,18 +444,33 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
     async (folder: string, repos: Repo[]) => {
       // Reuse a folder of the same name, so importing twice doesn't create duplicates.
       const target = (await createFolder(folder)) ?? DEFAULT_LIST;
-      const have = new Set(bookmarks.map((b) => b.fullName));
-      const fresh = repos.filter((r) => !have.has(r.fullName));
+      const byName = new Map(bookmarks.map((b) => [b.fullName.toLowerCase(), b]));
       const now = Date.now();
-      const rows: Bookmark[] = fresh.map((r, i) => ({ ...r, list: target, savedAt: now - i }));
+      const rows: Bookmark[] = repos
+        .filter((r) => !byName.has(r.fullName.toLowerCase()))
+        .map((r, i) => ({ ...r, list: target, lists: [target], savedAt: now - i }));
+      // Repos you already have are added to the imported folder too, so it matches what was shared.
+      const toLink = repos
+        .map((r) => byName.get(r.fullName.toLowerCase()))
+        .filter((b): b is Bookmark => Boolean(b) && !inFolderOf(b as Bookmark, target));
       if (cloud && user && db) {
         const batch = writeBatch(db);
         for (const b of rows) batch.set(doc(db, "users", user.uid, "bookmarks", docId(b.fullName)), b);
+        for (const b of toLink) {
+          const lists = withFolder(listsOf(b), target);
+          batch.update(doc(db, "users", user.uid, "bookmarks", docId(b.fullName)), { lists, list: lists[0] });
+        }
         await batch.commit();
       } else {
-        localBookmarks([...rows, ...bookmarks]);
+        const linkSet = new Set(toLink.map((b) => b.fullName));
+        const updated = bookmarks.map((b) => {
+          if (!linkSet.has(b.fullName)) return b;
+          const lists = withFolder(listsOf(b), target);
+          return { ...b, lists, list: lists[0] };
+        });
+        localBookmarks([...rows, ...updated]);
       }
-      return { folder: target, added: rows.length };
+      return { folder: target, added: rows.length + toLink.length };
     },
     [createFolder, bookmarks, cloud, user, localBookmarks],
   );
@@ -451,28 +512,46 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
 
   const saveMany = useCallback(
     async (repos: Repo[], folder?: string) => {
-      const have = new Set(bookmarks.map((b) => b.fullName));
+      const byName = new Map(bookmarks.map((b) => [b.fullName.toLowerCase(), b]));
       const now = Date.now();
       // Make sure a named folder exists first, and use its canonical spelling.
-      const target = folder?.trim() ? ((await createFolder(folder)) ?? DEFAULT_LIST) : DEFAULT_LIST;
+      const named = Boolean(folder?.trim());
+      const target = named ? ((await createFolder(folder as string)) ?? DEFAULT_LIST) : DEFAULT_LIST;
       const rows: Bookmark[] = repos
-        .filter((r) => !have.has(r.fullName))
-        .map((r, i) => ({ ...r, list: target, savedAt: now - i }));
-      if (rows.length === 0) return 0;
+        .filter((r) => !byName.has(r.fullName.toLowerCase()))
+        .map((r, i) => ({ ...r, list: target, lists: [target], savedAt: now - i }));
+      // With an explicit folder, repos you already have are added to it as well.
+      const toLink = named
+        ? repos
+            .map((r) => byName.get(r.fullName.toLowerCase()))
+            .filter((b): b is Bookmark => Boolean(b) && !inFolderOf(b as Bookmark, target))
+        : [];
+      if (rows.length === 0 && toLink.length === 0) return { created: 0, linked: 0 };
       try {
         if (cloud && user && db) {
           const batch = writeBatch(db);
           for (const b of rows) batch.set(doc(db, "users", user.uid, "bookmarks", docId(b.fullName)), b);
+          for (const b of toLink) {
+            const lists = withFolder(listsOf(b), target);
+            batch.update(doc(db, "users", user.uid, "bookmarks", docId(b.fullName)), { lists, list: lists[0] });
+          }
           await batch.commit();
         } else {
-          localBookmarks([...rows, ...bookmarks]);
+          const linkSet = new Set(toLink.map((b) => b.fullName));
+          const updated = bookmarks.map((b) => {
+            if (!linkSet.has(b.fullName)) return b;
+            const lists = withFolder(listsOf(b), target);
+            return { ...b, lists, list: lists[0] };
+          });
+          localBookmarks([...rows, ...updated]);
         }
       } catch {
         showToast({ message: "Couldn’t save those. Check your connection and try again." });
-        return 0;
+        return { created: 0, linked: 0 };
       }
-      showToast({ message: `Saved ${rows.length} repo${rows.length === 1 ? "" : "s"} to ${target}` });
-      return rows.length;
+      const n = rows.length + toLink.length;
+      showToast({ message: `Saved ${n} repo${n === 1 ? "" : "s"} to ${target}` });
+      return { created: rows.length, linked: toLink.length };
     },
     [bookmarks, cloud, user, localBookmarks, showToast, createFolder],
   );
@@ -481,10 +560,10 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
 
   const value = useMemo(
     () => ({
-      bookmarks, folders, ready, isSaved, toggle, moveToFolder, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll,
+      bookmarks, folders, ready, isSaved, toggle, setFolders, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll,
       saveMany, canShare: cloud || PREVIEW_MODE, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared,
     }),
-    [bookmarks, folders, ready, isSaved, toggle, moveToFolder, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll, cloud, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared, saveMany],
+    [bookmarks, folders, ready, isSaved, toggle, setFolders, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll, cloud, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared, saveMany],
   );
 
   const pickerBookmark = pickerFor ? bookmarks.find((b) => b.fullName === pickerFor) : undefined;
@@ -497,10 +576,12 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
         <FolderPicker
           repoName={pickerBookmark.fullName}
           folders={folders}
-          current={pickerBookmark.list}
-          onPick={(f) => {
-            void moveToFolder(pickerBookmark.fullName, f);
-            setPickerFor(null);
+          current={listsOf(pickerBookmark)}
+          onToggle={(f, on) => {
+            const now = listsOf(pickerBookmark);
+            void setFolders(pickerBookmark.fullName, on ? withFolder(now, f) : withoutFolder(now, f), {
+              quiet: true,
+            });
           }}
           onCreate={createFolder}
           onClose={() => setPickerFor(null)}
