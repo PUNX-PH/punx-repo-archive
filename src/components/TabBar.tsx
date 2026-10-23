@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "./AuthProvider";
 
 const tabs = [
   { href: "/", label: "Home", d: "M3 11l9-8 9 8v10h-6v-6H9v6H3z" },
@@ -13,6 +14,9 @@ const tabs = [
 
 export function TabBar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  // Nothing to navigate to until someone is signed in.
+  if (!user) return null;
   return (
     <nav className="tabbar" aria-label="Main">
       {tabs.map((t) => {

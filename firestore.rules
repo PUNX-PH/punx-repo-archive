@@ -1,27 +1,36 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Each user can only read and write their own bookmarks and folders.
-    match /users/{uid}/bookmarks/{id} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-    }
-    match /users/{uid}/folders/{id} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+    // Only signed-in, verified @punx.ai Google accounts can touch anything.
+    function isMember() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower().matches('.*@punx[.]ai')
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
     }
 
-    // Shared folders: anyone with the link can read one share by id, but nobody can
-    // list or search them. Only the owner can create, change or remove a share.
+    // Each member can only read and write their own bookmarks and folders.
+    match /users/{uid}/bookmarks/{id} {
+      allow read, write: if isMember() && request.auth.uid == uid;
+    }
+    match /users/{uid}/folders/{id} {
+      allow read, write: if isMember() && request.auth.uid == uid;
+    }
+
+    // Shared folders: any member with the link can read one share by id, but nobody can
+    // list or search them except their owner. Only the owner can create, change or remove a share.
     match /shares/{id} {
-      allow get: if true;
-      allow list: if request.auth != null && resource.data.ownerUid == request.auth.uid;
-      allow create: if request.auth != null
+      allow get: if isMember();
+      allow list: if isMember() && resource.data.ownerUid == request.auth.uid;
+      allow create: if isMember()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.repos.size() <= 200;
-      allow update: if request.auth != null
+      allow update: if isMember()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.repos.size() <= 200;
-      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      allow delete: if isMember() && resource.data.ownerUid == request.auth.uid;
     }
   }
 }

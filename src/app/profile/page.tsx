@@ -1,20 +1,29 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useBookmarks } from "@/components/BookmarksProvider";
+import { ALLOWED_DOMAIN } from "@/lib/domain";
 import type { Bookmark } from "@/lib/types";
 
-export default function ProfilePage() {
-  const { user, loading, configured, signInGoogle, signInEmail, signUpEmail, signOut } = useAuth();
+// Only follow same-site paths, so a crafted ?next= can't send someone elsewhere.
+const safeNext = (n: string | null) => (n && n.startsWith("/") && !n.startsWith("//") && !n.startsWith("/profile") ? n : null);
+
+function Profile() {
+  const { user, loading, configured, authError, signInGoogle, signOut } = useAuth();
   const { bookmarks, replaceAll } = useBookmarks();
+  const router = useRouter();
+  const next = safeNext(useSearchParams().get("next"));
   const fileRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"in" | "up">("in");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // After sign-in, go back to wherever they were headed.
+  useEffect(() => {
+    if (user && next) router.replace(next);
+  }, [user, next, router]);
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
@@ -22,7 +31,9 @@ export default function ProfilePage() {
     try {
       await fn();
     } catch (e) {
-      setError((e as Error).message.replace("Firebase: ", ""));
+      const msg = (e as Error).message;
+      // Closing the Google popup isn't an error worth showing.
+      if (!/popup-closed|cancelled-popup/.test(msg)) setError(msg.replace("Firebase: ", ""));
     } finally {
       setBusy(false);
     }
@@ -50,27 +61,6 @@ export default function ProfilePage() {
     }
   }
 
-  const tools = (
-    <>
-      <div className="actions">
-        <button className="btn" onClick={exportJson} disabled={bookmarks.length === 0}>Export bookmarks</button>
-        <button className="btn" onClick={() => fileRef.current?.click()}>Import bookmarks</button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) importJson(f);
-            e.target.value = "";
-          }}
-        />
-      </div>
-      {message && <p role="status" className="muted">{message}</p>}
-    </>
-  );
-
   if (loading) return <p className="muted">Loading…</p>;
 
   if (user) {
@@ -82,57 +72,56 @@ export default function ProfilePage() {
           {user.displayName && <span className="muted">{user.email}</span>}
           <span className="muted">{bookmarks.length} saved repo{bookmarks.length === 1 ? "" : "s"}, synced to your account</span>
         </div>
-        {tools}
         <div className="actions">
-          <button className="btn" onClick={() => run(signOut)}>Sign out</button>
+          <button className="btn" onClick={exportJson} disabled={bookmarks.length === 0}>Export bookmarks</button>
+          <button className="btn" onClick={() => fileRef.current?.click()}>Import bookmarks</button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) importJson(f);
+              e.target.value = "";
+            }}
+          />
+        </div>
+        {message && <p role="status" className="muted">{message}</p>}
+        <div className="actions">
+          <button className="btn" onClick={() => run(async () => { await signOut(); router.replace("/profile"); })}>Sign out</button>
         </div>
       </>
     );
   }
 
   return (
-    <>
-      <h1>{mode === "in" ? "Sign in" : "Create your Punx account"}</h1>
+    <div className="gate">
+      <h1>Sign in to continue</h1>
       <p className="muted">
-        Sign in to sync bookmarks across devices. Anything you saved as a guest ({bookmarks.length}) is added to your account.
+        Punx Repo Archive is for the Punx team. Search, Ask and your library unlock once you sign in with your <strong>@{ALLOWED_DOMAIN}</strong> Google account.
       </p>
 
       {configured ? (
-        <>
-          <button className="btn primary wide" disabled={busy} onClick={() => run(signInGoogle)}>
-            Continue with Google
-          </button>
-          <div className="divider"><span>or</span></div>
-
-          <form
-            className="stack"
-            onSubmit={(e) => {
-              e.preventDefault();
-              run(() => (mode === "in" ? signInEmail(email, password) : signUpEmail(email, password)));
-            }}
-          >
-            <input type="email" placeholder="Email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            <input
-              type="password"
-              placeholder="Password"
-              autoComplete={mode === "in" ? "current-password" : "new-password"}
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            <button className="btn wide" type="submit" disabled={busy}>{mode === "in" ? "Sign in" : "Create account"}</button>
-          </form>
-          {error && <p className="error">{error}</p>}
-          <button className="link" onClick={() => setMode(mode === "in" ? "up" : "in")}>
-            {mode === "in" ? "New here? Create an account" : "Have an account? Sign in"}
-          </button>
-        </>
+        <button className="btn primary wide" disabled={busy} onClick={() => run(signInGoogle)}>
+          {busy ? "Opening Google…" : `Sign in with your @${ALLOWED_DOMAIN} account`}
+        </button>
       ) : (
-        <div className="answer">Accounts aren’t connected in this build. Bookmarks are saved in this browser only.</div>
+        <div className="notice error-box">
+          <strong>Sign-in isn’t set up in this build.</strong>
+          <span>The Firebase keys are missing, so nobody can sign in yet.</span>
+        </div>
       )}
 
-      {tools}
-    </>
+      {(authError || error) && <p className="error" role="alert">{authError ?? error}</p>}
+    </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<p className="muted">Loading…</p>}>
+      <Profile />
+    </Suspense>
   );
 }

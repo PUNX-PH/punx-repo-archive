@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { searchRepos } from "@/lib/github";
+import { requireMember } from "@/lib/server-auth";
 import type { Repo } from "@/lib/types";
 
 const MODEL = "claude-sonnet-5-5";
@@ -10,6 +11,10 @@ function text(res: Anthropic.Message) {
 }
 
 export async function POST(req: Request) {
+  // Checked here as well as in the proxy: this route spends Anthropic credits.
+  const denied = await requireMember(req);
+  if (denied) return denied;
+
   const { question } = (await req.json().catch(() => ({}))) as { question?: string };
   const q = question?.trim().slice(0, 500);
   if (!q) return NextResponse.json({ error: "Ask a question first." }, { status: 400 });
