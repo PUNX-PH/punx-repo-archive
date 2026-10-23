@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
+import { AppearanceSettings } from "@/components/AppearanceSettings";
 import { useAuth } from "@/components/AuthProvider";
 import { useBookmarks } from "@/components/BookmarksProvider";
 import { CheckIcon, GoogleIcon } from "@/components/Icons";
 import { LogoMark } from "@/components/LogoMark";
-import { ALLOWED_DOMAIN } from "@/lib/domain";
+import { ALLOWED_DOMAIN, PREVIEW_MODE } from "@/lib/domain";
 import type { Bookmark } from "@/lib/types";
 
 // Only follow same-site paths, so a crafted ?next= can't send someone elsewhere.
@@ -15,7 +16,7 @@ const safeNext = (n: string | null) => (n && n.startsWith("/") && !n.startsWith(
 
 function Profile() {
   const { user, loading, configured, authError, signInGoogle, signOut } = useAuth();
-  const { bookmarks, folders, replaceAll } = useBookmarks();
+  const { bookmarks, folders, replaceAll, shares } = useBookmarks();
   const router = useRouter();
   const next = safeNext(useSearchParams().get("next"));
   const fileRef = useRef<HTMLInputElement>(null);
@@ -66,13 +67,14 @@ function Profile() {
 
   if (loading) return <p className="muted">Loading…</p>;
 
-  if (user) {
-    const name = user.displayName ?? user.email ?? "You";
+  // PREVIEW_MODE (local dev only) shows the signed-in view without an account.
+  if (user || PREVIEW_MODE) {
+    const name = user?.displayName ?? user?.email ?? "Preview";
     return (
       <>
         <h1>Profile</h1>
         <div className="profile-card">
-          {user.photoURL ? (
+          {user?.photoURL ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={user.photoURL} alt="" referrerPolicy="no-referrer" />
           ) : (
@@ -80,12 +82,21 @@ function Profile() {
           )}
           <div className="who">
             <strong>{name}</strong>
-            {user.displayName && <span className="muted">{user.email}</span>}
+            {user?.displayName && <span className="muted">{user.email}</span>}
             <span className="muted">{bookmarks.length} saved repo{bookmarks.length === 1 ? "" : "s"} in {folders.length} folder{folders.length === 1 ? "" : "s"}, synced to your account</span>
           </div>
         </div>
 
-        <p className="muted" style={{ margin: "0 0 8px" }}>
+        <div className="stats" style={{ marginTop: 0 }}>
+          <div className="stat"><strong>{bookmarks.length}</strong><span>Saved repos</span></div>
+          <div className="stat"><strong>{folders.length}</strong><span>Folders</span></div>
+          <div className="stat"><strong>{shares.length}</strong><span>Shared folders</span></div>
+          <div className="stat"><strong>{new Set(bookmarks.map((b) => b.language).filter(Boolean)).size}</strong><span>Languages</span></div>
+        </div>
+
+        <AppearanceSettings />
+
+        <p className="muted" style={{ margin: "20px 0 8px" }}>
           Folders you share, and ones teammates shared with you, are under <Link href="/library" style={{ textDecoration: "underline" }}>Library → Shared</Link>.
         </p>
 

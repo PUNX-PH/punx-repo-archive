@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Greeting } from "@/components/Greeting";
+import { HeroArt } from "@/components/HeroArt";
 import { FolderIcon } from "@/components/FolderPicker";
 import { SparkIcon } from "@/components/Icons";
 import { LibraryPeek } from "@/components/LibraryPeek";
 import { RecentlySaved } from "@/components/RecentlySaved";
+import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { SearchBox } from "@/components/SearchBox";
 import { Trending } from "@/components/Trending";
 
@@ -19,9 +21,10 @@ export default function Home() {
   return (
     <>
       <div className="hero">
+        <HeroArt />
         <Greeting />
         <p className="hero-sub">Search GitHub, ask if something already exists, and keep what you find in folders your team can share.</p>
-        <SearchBox />
+        <SearchBox rotate />
         <div className="chips scroll" aria-label="Quick searches">
           {SHORTCUTS.map((s) => (
             <Link key={s.label} href={`/search?q=${encodeURIComponent(s.q)}`} className="chip">{s.label}</Link>
@@ -46,6 +49,7 @@ export default function Home() {
         </Link>
       </div>
 
+      <RecentlyViewed />
       <RecentlySaved />
       <Trending />
     </>

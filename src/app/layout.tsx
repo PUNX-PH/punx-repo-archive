@@ -23,8 +23,8 @@ export const viewport: Viewport = {
   ],
 };
 
-// Runs before paint so a saved light/dark choice doesn't flash the wrong theme.
-const themeScript = `try{var t=localStorage.getItem("punx.theme");if(t==="light"||t==="dark")document.documentElement.setAttribute("data-theme",t)}catch(e){}`;
+// Runs before paint so a saved theme and accent color don't flash the defaults.
+const themeScript = `try{var d=document.documentElement,t=localStorage.getItem("punx.theme"),a=localStorage.getItem("punx.accent");if(t==="light"||t==="dark")d.setAttribute("data-theme",t);if(a&&a!=="orange")d.setAttribute("data-accent",a)}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

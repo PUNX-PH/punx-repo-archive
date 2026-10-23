@@ -37,6 +37,8 @@ type BookmarksCtx = {
   deleteFolder: (name: string) => Promise<void>;
   openFolderPicker: (fullName: string) => void;
   replaceAll: (next: Bookmark[]) => Promise<void>;
+  /** Saves repos that aren't saved yet into the default folder. Returns how many were new. */
+  saveMany: (repos: Repo[]) => Promise<number>;
   /** True when signed in, which is required to share. */
   canShare: boolean;
   /** The user's active shares, one per shared folder. */
@@ -430,14 +432,40 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
     [cloud, user],
   );
 
+  const saveMany = useCallback(
+    async (repos: Repo[]) => {
+      const have = new Set(bookmarks.map((b) => b.fullName));
+      const now = Date.now();
+      const rows: Bookmark[] = repos
+        .filter((r) => !have.has(r.fullName))
+        .map((r, i) => ({ ...r, list: DEFAULT_LIST, savedAt: now - i }));
+      if (rows.length === 0) return 0;
+      try {
+        if (cloud && user && db) {
+          const batch = writeBatch(db);
+          for (const b of rows) batch.set(doc(db, "users", user.uid, "bookmarks", docId(b.fullName)), b);
+          await batch.commit();
+        } else {
+          localBookmarks([...rows, ...bookmarks]);
+        }
+      } catch {
+        showToast({ message: "Couldn’t save those. Check your connection and try again." });
+        return 0;
+      }
+      showToast({ message: `Saved ${rows.length} repo${rows.length === 1 ? "" : "s"} to ${DEFAULT_LIST}` });
+      return rows.length;
+    },
+    [bookmarks, cloud, user, localBookmarks, showToast],
+  );
+
   const openFolderPicker = useCallback((fullName: string) => setPickerFor(fullName), []);
 
   const value = useMemo(
     () => ({
       bookmarks, folders, ready, isSaved, toggle, moveToFolder, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll,
-      canShare: cloud || PREVIEW_MODE, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared,
+      saveMany, canShare: cloud || PREVIEW_MODE, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared,
     }),
-    [bookmarks, folders, ready, isSaved, toggle, moveToFolder, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll, cloud, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared],
+    [bookmarks, folders, ready, isSaved, toggle, moveToFolder, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll, cloud, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared, saveMany],
   );
 
   const pickerBookmark = pickerFor ? bookmarks.find((b) => b.fullName === pickerFor) : undefined;

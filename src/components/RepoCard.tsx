@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { languageColor } from "@/lib/languages";
+import { timeAgo } from "@/lib/time";
 import type { Repo } from "@/lib/types";
 import { BookmarkButton } from "./BookmarkButton";
 import { StarIcon } from "./Icons";
@@ -29,6 +30,7 @@ export function RepoCard({ repo }: { repo: Repo }) {
                 {repo.language}
               </span>
             )}
+            {repo.updatedAt && <span title="Last push">Updated {timeAgo(repo.updatedAt)}</span>}
             {repo.topics.slice(0, 2).map((t) => (
               <span key={t} className="chip chip-sm">{t}</span>
             ))}

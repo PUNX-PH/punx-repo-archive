@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { SparkIcon } from "@/components/Icons";
+import ReactMarkdown from "react-markdown";
+import { useBookmarks } from "@/components/BookmarksProvider";
+import { CheckIcon, SparkIcon } from "@/components/Icons";
 import { RepoCard } from "@/components/RepoCard";
 import type { Repo } from "@/lib/types";
 
@@ -13,15 +15,39 @@ const EXAMPLES = [
   "A Rust CLI for finding duplicate files",
 ];
 
+const ASKS_KEY = "punx.asks.v1";
+
+function readAsks(): string[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(ASKS_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((s) => typeof s === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function rememberAsk(q: string) {
+  try {
+    const next = [q, ...readAsks().filter((s) => s.toLowerCase() !== q.toLowerCase())].slice(0, 5);
+    localStorage.setItem(ASKS_KEY, JSON.stringify(next));
+  } catch {}
+}
+
 function Ask() {
   const params = useSearchParams();
+  const { saveMany } = useBookmarks();
   const [question, setQuestion] = useState(params.get("q") ?? "");
   const [asked, setAsked] = useState("");
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<string | null>(null);
   const [repos, setRepos] = useState<Repo[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [recent, setRecent] = useState<string[]>([]);
+  const [copied, setCopied] = useState(false);
+  const [savedAll, setSavedAll] = useState(false);
   const autoRan = useRef(false);
+
+  useEffect(() => setRecent(readAsks()), []);
 
   async function ask(q: string) {
     if (!q.trim() || busy) return;
@@ -29,6 +55,7 @@ function Ask() {
     setError(null);
     setAnswer(null);
     setRepos([]);
+    setSavedAll(false);
     setAsked(q.trim());
     try {
       const res = await fetch("/api/ask", {
@@ -40,6 +67,8 @@ function Ask() {
       if (!res.ok) throw new Error(data.error ?? "Something went wrong.");
       setAnswer(data.answer);
       setRepos(data.repos);
+      rememberAsk(q.trim());
+      setRecent(readAsks());
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -56,6 +85,17 @@ function Ask() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function copyAnswer() {
+    if (!answer) return;
+    try {
+      await navigator.clipboard.writeText(answer.replace(/\*\*/g, ""));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } catch {
+      // Clipboard blocked.
+    }
+  }
 
   const fresh = !busy && !answer && !error && repos.length === 0;
 
@@ -91,6 +131,30 @@ function Ask() {
         </div>
       </form>
 
+      {fresh && recent.length > 0 && (
+        <section>
+          <div className="section-head">
+            <h2>Your recent questions</h2>
+            <button
+              className="link-btn"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(ASKS_KEY);
+                } catch {}
+                setRecent([]);
+              }}
+            >
+              Clear
+            </button>
+          </div>
+          <div className="examples">
+            {recent.map((r) => (
+              <button key={r} className="example" onClick={() => { setQuestion(r); ask(r); }}>{r}</button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {fresh && (
         <section>
           <h2>Try one of these</h2>
@@ -120,18 +184,35 @@ function Ask() {
       )}
 
       {answer && (
-        <div className="answer" role="status">
-          <p className="answer-label"><SparkIcon size={14} /> Claude says</p>
-          {answer}
+        <div className="answer answer-in" role="status">
+          <div className="answer-top">
+            <p className="answer-label"><SparkIcon size={14} /> Claude says</p>
+            <button className="link-btn" onClick={copyAnswer}>{copied ? "Copied ✓" : "Copy"}</button>
+          </div>
+          <div className="answer-text">
+            <ReactMarkdown>{answer}</ReactMarkdown>
+          </div>
         </div>
       )}
 
       {repos.length > 0 && (
         <>
-          <p className="muted result-count">
-            {repos.length} repos found ·{" "}
-            <Link href={`/search?q=${encodeURIComponent(asked)}`}>Search “{asked.length > 30 ? asked.slice(0, 30) + "…" : asked}” instead</Link>
-          </p>
+          <div className="result-bar">
+            <p className="muted result-count" style={{ margin: 0 }}>
+              {repos.length} repos found ·{" "}
+              <Link href={`/search?q=${encodeURIComponent(asked)}`}>Search “{asked.length > 30 ? asked.slice(0, 30) + "…" : asked}” instead</Link>
+            </p>
+            <button
+              className="btn"
+              disabled={savedAll}
+              onClick={async () => {
+                await saveMany(repos);
+                setSavedAll(true);
+              }}
+            >
+              {savedAll ? <><CheckIcon size={16} /> Saved all</> : `Save all ${repos.length}`}
+            </button>
+          </div>
           <div className="grid">
             {repos.map((r) => (
               <RepoCard key={r.fullName} repo={r} />

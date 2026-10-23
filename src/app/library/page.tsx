@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { BookmarkButton } from "@/components/BookmarkButton";
 import { useBookmarks } from "@/components/BookmarksProvider";
 import { FolderIcon } from "@/components/FolderPicker";
@@ -16,18 +17,27 @@ import { shareStatKey } from "@/lib/views";
 
 type Mode = "idle" | "new" | "rename" | "delete";
 
-export default function LibraryPage() {
+function LibraryInner() {
   const {
     bookmarks, folders, ready, createFolder, renameFolder, deleteFolder, openFolderPicker,
     canShare, shares, shareFolder, unshareFolder, sharedWithMe,
   } = useBookmarks();
+  const params = useSearchParams();
+  const wanted = params.get("folder");
   const [view, setView] = useState<"folders" | "shared">("folders");
   const [shareFor, setShareFor] = useState<string | null>(null);
-  const [active, setActive] = useState("All");
+  const [active, setActive] = useState(wanted ?? "All");
   const [filter, setFilter] = useState("");
   const [mode, setMode] = useState<Mode>("idle");
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (wanted) {
+      setActive(wanted);
+      setView("folders");
+    }
+  }, [wanted]);
 
   if (!ready) {
     return (
@@ -288,5 +298,13 @@ export default function LibraryPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function LibraryPage() {
+  return (
+    <Suspense fallback={<h1>Library</h1>}>
+      <LibraryInner />
+    </Suspense>
   );
 }

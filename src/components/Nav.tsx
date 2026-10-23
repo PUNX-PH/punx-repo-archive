@@ -32,7 +32,7 @@ export function Logo() {
 }
 
 // One <nav>: a bottom tab bar on phones, a left sidebar on desktop.
-export function Nav({ user }: { user: User | null }) {
+export function Nav({ user, onQuickFind }: { user: User | null; onQuickFind?: () => void }) {
   const pathname = usePathname();
   const name = user?.displayName ?? user?.email ?? "Preview";
   const initial = name.trim().charAt(0).toUpperCase();
@@ -40,6 +40,17 @@ export function Nav({ user }: { user: User | null }) {
   return (
     <nav className="nav" aria-label="Main">
       <div className="nav-brand"><Logo /></div>
+
+      {onQuickFind && (
+        <button className="quick-find" onClick={onQuickFind} aria-label="Quick find (Ctrl or Command + K)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.3-4.3" />
+          </svg>
+          <span>Quick find</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+      )}
 
       <div className="nav-items">
         {TABS.map((t) => {

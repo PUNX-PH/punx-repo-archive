@@ -1,52 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-type Theme = "system" | "light" | "dark";
-
-const ORDER: Theme[] = ["system", "light", "dark"];
-const LABEL: Record<Theme, string> = { system: "Auto", light: "Light", dark: "Dark" };
-const EVENT = "punx-theme";
-
-function apply(theme: Theme) {
-  const root = document.documentElement;
-  if (theme === "system") root.removeAttribute("data-theme");
-  else root.setAttribute("data-theme", theme);
-}
-
-function read(): Theme {
-  try {
-    const saved = localStorage.getItem("punx.theme");
-    return saved === "light" || saved === "dark" ? saved : "system";
-  } catch {
-    return "system";
-  }
-}
+import { THEME_EVENT, THEME_LABEL, cycleTheme, getTheme, type Theme } from "@/lib/theme";
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("system");
 
-  // There can be two toggles on screen (top bar and sidebar), so keep them in step.
+  // There can be several controls on screen (top bar, sidebar, command palette, profile), so stay in step.
   useEffect(() => {
-    setTheme(read());
-    const sync = () => setTheme(read());
-    window.addEventListener(EVENT, sync);
-    return () => window.removeEventListener(EVENT, sync);
+    setTheme(getTheme());
+    const sync = () => setTheme(getTheme());
+    window.addEventListener(THEME_EVENT, sync);
+    return () => window.removeEventListener(THEME_EVENT, sync);
   }, []);
 
-  function next() {
-    const t = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
-    apply(t);
-    try {
-      if (t === "system") localStorage.removeItem("punx.theme");
-      else localStorage.setItem("punx.theme", t);
-    } catch {}
-    setTheme(t);
-    window.dispatchEvent(new Event(EVENT));
-  }
-
   return (
-    <button className="theme-toggle" onClick={next} aria-label={`Theme: ${LABEL[theme]}. Click to change.`} title={`Theme: ${LABEL[theme]}`}>
+    <button
+      className="theme-toggle"
+      onClick={() => setTheme(cycleTheme())}
+      aria-label={`Theme: ${THEME_LABEL[theme]}. Click to change.`}
+      title={`Theme: ${THEME_LABEL[theme]}`}
+    >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         {theme === "light" && (
           <>
@@ -62,7 +36,7 @@ export function ThemeToggle() {
           </>
         )}
       </svg>
-      <span>{LABEL[theme]}</span>
+      <span>{THEME_LABEL[theme]}</span>
     </button>
   );
 }

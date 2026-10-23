@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { PREVIEW_MODE } from "@/lib/domain";
 import { useAuth } from "./AuthProvider";
+import { CommandPalette } from "./CommandPalette";
+import { SearchIcon } from "./Icons";
 import { Logo, Nav } from "./Nav";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -12,11 +14,18 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const router = useRouter();
   const showNav = Boolean(user) || PREVIEW_MODE;
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
-  // Press "/" anywhere (outside a text field) to jump to search, like GitHub.
   useEffect(() => {
     if (!showNav) return;
     const onKey = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + K opens quick find from anywhere, even inside a text field.
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+        return;
+      }
+      // "/" outside a text field jumps to search, like GitHub.
       if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
@@ -31,14 +40,22 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={`app${showNav ? "" : " no-nav"}`}>
-      {showNav && <Nav user={user} />}
+      {showNav && <Nav user={user} onQuickFind={() => setPaletteOpen(true)} />}
       <div className="main-col">
         <header className="topbar">
           <Logo />
-          <ThemeToggle />
+          <div className="topbar-actions">
+            {showNav && (
+              <button className="icon-btn" onClick={() => setPaletteOpen(true)} aria-label="Quick find">
+                <SearchIcon size={18} />
+              </button>
+            )}
+            <ThemeToggle />
+          </div>
         </header>
         <main id="main" className="page">{children}</main>
       </div>
+      {showNav && <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />}
     </div>
   );
 }
