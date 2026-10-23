@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { TOKEN_COOKIE, isPunxEmail } from "./domain";
+import { PREVIEW_MODE, TOKEN_COOKIE, isPunxEmail } from "./domain";
 
 // Firebase ID tokens are signed with Google's rotating keys, so no secret is needed to check one.
 const JWKS = createRemoteJWKSet(
@@ -37,6 +37,7 @@ export function tokenFromRequest(req: Request): string | undefined {
 
 /** For route handlers: a 401 Response when the caller isn't a signed-in @punx.ai member, otherwise null. */
 export async function requireMember(req: Request): Promise<Response | null> {
+  if (PREVIEW_MODE) return null;
   const member = await verifyPunxToken(tokenFromRequest(req));
   if (member) return null;
   return Response.json({ error: "Sign in with your @punx.ai account to use this." }, { status: 401 });

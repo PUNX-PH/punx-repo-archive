@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { SparkIcon } from "@/components/Icons";
 import { RepoCard } from "@/components/RepoCard";
 import type { Repo } from "@/lib/types";
 
@@ -60,8 +61,10 @@ function Ask() {
 
   return (
     <>
-      <h1>Ask</h1>
-      <p className="muted">Describe what you need in plain words. We’ll check whether a repo like it already exists.</p>
+      <p className="eyebrow">Ask Claude</p>
+      <h1>Does a repo for this already exist?</h1>
+      <p className="muted">Describe what you’re about to build in plain words. We search GitHub for you and tell you what fits.</p>
+
       <form
         className="askbox"
         onSubmit={(e) => {
@@ -82,16 +85,18 @@ function Ask() {
         />
         <div className="ask-row">
           <span className="muted hint">{question.length}/500 · Ctrl+Enter to send</span>
-          <button type="submit" disabled={busy || !question.trim()}>{busy ? "Looking…" : "Ask"}</button>
+          <button type="submit" disabled={busy || !question.trim()}>
+            <SparkIcon size={18} /> {busy ? "Looking…" : "Ask"}
+          </button>
         </div>
       </form>
 
       {fresh && (
         <section>
           <h2>Try one of these</h2>
-          <div className="chips">
+          <div className="examples">
             {EXAMPLES.map((ex) => (
-              <button key={ex} className="chip" onClick={() => { setQuestion(ex); ask(ex); }}>{ex}</button>
+              <button key={ex} className="example" onClick={() => { setQuestion(ex); ask(ex); }}>{ex}</button>
             ))}
           </div>
         </section>
@@ -99,10 +104,10 @@ function Ask() {
 
       {busy && (
         <div className="answer" role="status" aria-live="polite">
+          <p className="answer-label"><SparkIcon size={14} /> Searching GitHub</p>
           <div className="skeleton" style={{ width: "92%", height: 14 }} />
           <div className="skeleton" style={{ width: "78%", height: 14, marginTop: 8 }} />
           <div className="skeleton" style={{ width: "40%", height: 14, marginTop: 8 }} />
-          <p className="muted" style={{ margin: "12px 0 0" }}>Searching GitHub for you…</p>
         </div>
       )}
 
@@ -114,7 +119,12 @@ function Ask() {
         </div>
       )}
 
-      {answer && <div className="answer" role="status">{answer}</div>}
+      {answer && (
+        <div className="answer" role="status">
+          <p className="answer-label"><SparkIcon size={14} /> Claude says</p>
+          {answer}
+        </div>
+      )}
 
       {repos.length > 0 && (
         <>
@@ -122,7 +132,7 @@ function Ask() {
             {repos.length} repos found ·{" "}
             <Link href={`/search?q=${encodeURIComponent(asked)}`}>Search “{asked.length > 30 ? asked.slice(0, 30) + "…" : asked}” instead</Link>
           </p>
-          <div className="stack">
+          <div className="grid">
             {repos.map((r) => (
               <RepoCard key={r.fullName} repo={r} />
             ))}

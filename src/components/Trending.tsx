@@ -7,7 +7,7 @@ export async function Trending() {
   const since = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
   let repos: Awaited<ReturnType<typeof searchRepos>> = [];
   try {
-    repos = await searchRepos(`created:>${since}`, 5, "stars");
+    repos = await searchRepos(`created:>${since}`, 6, "stars");
   } catch {
     return null;
   }
@@ -19,7 +19,8 @@ export async function Trending() {
         <h2>Trending this week</h2>
         <Link href={`/search?q=${encodeURIComponent(`created:>${since}`)}&sort=stars`}>See more</Link>
       </div>
-      <div className="stack">
+      <p className="muted" style={{ margin: "0 0 4px", fontSize: "0.9rem" }}>Brand-new repos getting the most stars right now.</p>
+      <div className="grid">
         {repos.map((r) => (
           <RepoCard key={r.fullName} repo={r} />
         ))}

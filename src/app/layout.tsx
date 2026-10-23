@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import Link from "next/link";
+import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/components/AuthProvider";
 import { BookmarksProvider } from "@/components/BookmarksProvider";
-import { TabBar } from "@/components/TabBar";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { Shell } from "@/components/Shell";
 import "./globals.css";
+
+const sans = Geist({ subsets: ["latin"], variable: "--font-sans", display: "swap" });
+const mono = Geist_Mono({ subsets: ["latin"], variable: "--font-mono", display: "swap" });
 
 export const metadata: Metadata = {
   title: { default: "Punx Repo Archive", template: "%s · Punx Repo Archive" },
@@ -14,9 +16,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#faf8f4" },
-    { media: "(prefers-color-scheme: dark)", color: "#141312" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f5f1" },
+    { media: "(prefers-color-scheme: dark)", color: "#121110" },
   ],
 };
 
@@ -25,7 +28,7 @@ const themeScript = `try{var t=localStorage.getItem("punx.theme");if(t==="light"
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
@@ -33,12 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <a href="#main" className="skip-link">Skip to content</a>
         <AuthProvider>
           <BookmarksProvider>
-            <header className="topbar">
-              <Link href="/" className="logo">punx<span>/archive</span></Link>
-              <ThemeToggle />
-            </header>
-            <main id="main" className="page">{children}</main>
-            <TabBar />
+            <Shell>{children}</Shell>
           </BookmarksProvider>
         </AuthProvider>
       </body>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import { SearchIcon } from "@/components/Icons";
 import { RecentSearches } from "@/components/RecentSearches";
 import { RepoCard } from "@/components/RepoCard";
 import { SearchBox } from "@/components/SearchBox";
@@ -51,28 +52,32 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       {!query && (
         <>
           <RecentSearches />
-          <p className="muted">
-            Try a topic like <Link href="/search?q=topic:nextjs">topic:nextjs</Link>, an author like{" "}
-            <Link href="/search?q=user:vercel">user:vercel</Link>, or just describe it in words.
-          </p>
+          <div className="notice">
+            <span className="notice-icon"><SearchIcon /></span>
+            <strong>Search all of GitHub</strong>
+            <span>
+              Try a topic like <Link href="/search?q=topic:nextjs">topic:nextjs</Link>, an author like{" "}
+              <Link href="/search?q=user:vercel">user:vercel</Link>, or just describe it in words.
+            </span>
+          </div>
         </>
       )}
 
       {query && (
         <div className="filters" aria-label="Filters">
-          <div className="chips">
+          <div className="segmented" role="group" aria-label="Sort by">
             {SORTS.map((s) => (
               <Link
                 key={s.value}
                 href={href(query, s.value, activeLang)}
-                className={`chip${sort === s.value ? " is-active" : ""}`}
+                className={sort === s.value ? "is-active" : undefined}
                 aria-current={sort === s.value ? "true" : undefined}
               >
                 {s.label}
               </Link>
             ))}
           </div>
-          <div className="chips">
+          <div className="chips scroll" role="group" aria-label="Language">
             <Link href={href(query, sort, "")} className={`chip chip-sm${!activeLang ? " is-active" : ""}`}>Any language</Link>
             {LANGS.map((l) => (
               <Link key={l} href={href(query, sort, l)} className={`chip chip-sm${activeLang === l ? " is-active" : ""}`}>
@@ -93,6 +98,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
 
       {query && !error && repos.length === 0 && (
         <div className="notice">
+          <span className="notice-icon"><SearchIcon /></span>
           <strong>No repos found for “{query}”.</strong>
           <span>Check the spelling, remove a filter, or let Ask figure out the right search.</span>
           <Link className="btn primary" href={`/ask?q=${encodeURIComponent(query)}`}>Ask instead</Link>
@@ -100,7 +106,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
       )}
 
       {repos.length > 0 && <p className="muted result-count">Top {repos.length} results</p>}
-      <div className="stack">
+      <div className="grid">
         {repos.map((r) => (
           <RepoCard key={r.fullName} repo={r} />
         ))}

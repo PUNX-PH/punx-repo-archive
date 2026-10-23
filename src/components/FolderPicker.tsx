@@ -78,6 +78,8 @@ export function FolderPicker({ repoName, folders, current, onPick, onCreate, onC
             }}
             placeholder="New folder, e.g. Java"
             aria-label="New folder name"
+            autoComplete="off"
+            spellCheck={false}
             aria-invalid={Boolean(error)}
           />
           <button className="btn" type="submit">Create</button>

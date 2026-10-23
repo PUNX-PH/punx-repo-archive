@@ -6,6 +6,7 @@ type Theme = "system" | "light" | "dark";
 
 const ORDER: Theme[] = ["system", "light", "dark"];
 const LABEL: Record<Theme, string> = { system: "Auto", light: "Light", dark: "Dark" };
+const EVENT = "punx-theme";
 
 function apply(theme: Theme) {
   const root = document.documentElement;
@@ -13,24 +14,35 @@ function apply(theme: Theme) {
   else root.setAttribute("data-theme", theme);
 }
 
+function read(): Theme {
+  try {
+    const saved = localStorage.getItem("punx.theme");
+    return saved === "light" || saved === "dark" ? saved : "system";
+  } catch {
+    return "system";
+  }
+}
+
 export function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("system");
 
+  // There can be two toggles on screen (top bar and sidebar), so keep them in step.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("punx.theme");
-      if (saved === "light" || saved === "dark") setTheme(saved);
-    } catch {}
+    setTheme(read());
+    const sync = () => setTheme(read());
+    window.addEventListener(EVENT, sync);
+    return () => window.removeEventListener(EVENT, sync);
   }, []);
 
   function next() {
     const t = ORDER[(ORDER.indexOf(theme) + 1) % ORDER.length];
-    setTheme(t);
     apply(t);
     try {
       if (t === "system") localStorage.removeItem("punx.theme");
       else localStorage.setItem("punx.theme", t);
     } catch {}
+    setTheme(t);
+    window.dispatchEvent(new Event(EVENT));
   }
 
   return (

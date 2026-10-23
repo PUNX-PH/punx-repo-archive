@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { TOKEN_COOKIE } from "./lib/domain";
+import { PREVIEW_MODE, TOKEN_COOKIE } from "./lib/domain";
 import { verifyPunxToken } from "./lib/server-auth";
 
 // Everything except the sign-in page needs a valid @punx.ai session.
 export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  if (pathname === "/profile") return NextResponse.next();
+  if (pathname === "/profile" || PREVIEW_MODE) return NextResponse.next();
 
   // Local development without Firebase keys: nothing to check against, so don't lock yourself out.
   if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID && process.env.NODE_ENV !== "production") {

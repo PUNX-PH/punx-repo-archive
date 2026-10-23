@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useBookmarks } from "@/components/BookmarksProvider";
+import { CheckIcon, GoogleIcon } from "@/components/Icons";
 import { ALLOWED_DOMAIN } from "@/lib/domain";
 import type { Bookmark } from "@/lib/types";
 
@@ -12,7 +13,7 @@ const safeNext = (n: string | null) => (n && n.startsWith("/") && !n.startsWith(
 
 function Profile() {
   const { user, loading, configured, authError, signInGoogle, signOut } = useAuth();
-  const { bookmarks, replaceAll } = useBookmarks();
+  const { bookmarks, folders, replaceAll } = useBookmarks();
   const router = useRouter();
   const next = safeNext(useSearchParams().get("next"));
   const fileRef = useRef<HTMLInputElement>(null);
@@ -64,14 +65,26 @@ function Profile() {
   if (loading) return <p className="muted">Loading…</p>;
 
   if (user) {
+    const name = user.displayName ?? user.email ?? "You";
     return (
       <>
         <h1>Profile</h1>
         <div className="profile-card">
-          <strong>{user.displayName ?? user.email}</strong>
-          {user.displayName && <span className="muted">{user.email}</span>}
-          <span className="muted">{bookmarks.length} saved repo{bookmarks.length === 1 ? "" : "s"}, synced to your account</span>
+          {user.photoURL ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={user.photoURL} alt="" referrerPolicy="no-referrer" />
+          ) : (
+            <span className="user-initial" aria-hidden="true">{name.charAt(0).toUpperCase()}</span>
+          )}
+          <div className="who">
+            <strong>{name}</strong>
+            {user.displayName && <span className="muted">{user.email}</span>}
+            <span className="muted">{bookmarks.length} saved repo{bookmarks.length === 1 ? "" : "s"} in {folders.length} folder{folders.length === 1 ? "" : "s"}, synced to your account</span>
+          </div>
         </div>
+
+        <h2>Your data</h2>
+        <p className="muted" style={{ margin: "4px 0 0" }}>Download a backup of your bookmarks, or import one from a file.</p>
         <div className="actions">
           <button className="btn" onClick={exportJson} disabled={bookmarks.length === 0}>Export bookmarks</button>
           <button className="btn" onClick={() => fileRef.current?.click()}>Import bookmarks</button>
@@ -88,7 +101,8 @@ function Profile() {
           />
         </div>
         {message && <p role="status" className="muted">{message}</p>}
-        <div className="actions">
+
+        <div className="actions" style={{ marginTop: 24 }}>
           <button className="btn" onClick={() => run(async () => { await signOut(); router.replace("/profile"); })}>Sign out</button>
         </div>
       </>
@@ -97,14 +111,19 @@ function Profile() {
 
   return (
     <div className="gate">
+      <span className="logo-mark" aria-hidden="true">p</span>
       <h1>Sign in to continue</h1>
-      <p className="muted">
-        Punx Repo Archive is for the Punx team. Search, Ask and your library unlock once you sign in with your <strong>@{ALLOWED_DOMAIN}</strong> Google account.
-      </p>
+      <p className="muted" style={{ margin: 0 }}>Punx Repo Archive is for the Punx team. Use your <strong>@{ALLOWED_DOMAIN}</strong> Google account.</p>
+
+      <ul>
+        <li><CheckIcon size={18} /> Search GitHub and ask if a repo already exists</li>
+        <li><CheckIcon size={18} /> Save repos into your own folders</li>
+        <li><CheckIcon size={18} /> Share folders with teammates by link</li>
+      </ul>
 
       {configured ? (
-        <button className="btn primary wide" disabled={busy} onClick={() => run(signInGoogle)}>
-          {busy ? "Opening Google…" : `Sign in with your @${ALLOWED_DOMAIN} account`}
+        <button className="btn wide" disabled={busy} onClick={() => run(signInGoogle)}>
+          <GoogleIcon /> {busy ? "Opening Google…" : `Continue with Google`}
         </button>
       ) : (
         <div className="notice error-box">
@@ -113,7 +132,8 @@ function Profile() {
         </div>
       )}
 
-      {(authError || error) && <p className="error" role="alert">{authError ?? error}</p>}
+      {(authError || error) && <p className="error" role="alert" style={{ marginTop: 14 }}>{authError ?? error}</p>}
+      <p className="fine">Other Google accounts are signed straight back out.</p>
     </div>
   );
 }

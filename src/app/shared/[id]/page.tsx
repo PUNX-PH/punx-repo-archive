@@ -71,9 +71,10 @@ export default function SharedFolderPage() {
 
   return (
     <>
-      <div className="repo-head">
-        <FolderIcon />
+      <div className="repo-hero">
+        <span className="quick-icon"><FolderIcon /></span>
         <div>
+          <p className="eyebrow">Shared folder</p>
           <h1>{share.folder}</h1>
           <p className="muted">
             Shared by {share.ownerName} · {share.repos.length} repo{share.repos.length === 1 ? "" : "s"}
@@ -97,7 +98,7 @@ export default function SharedFolderPage() {
       )}
 
       {share.repos.length === 0 && <p className="muted">This folder is empty right now.</p>}
-      <div className="stack">
+      <div className="grid">
         {share.repos.map((r) => (
           <RepoCard key={r.fullName} repo={r} />
         ))}
