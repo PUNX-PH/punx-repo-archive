@@ -1,30 +1,14 @@
-import Link from "next/link";
 import { searchRepos } from "@/lib/github";
-import { RepoCard } from "./RepoCard";
+import { trendingQuery } from "@/lib/trending";
+import { TrendingTabs } from "./TrendingTabs";
 
-// New repos from the last week, ranked by stars. Fails quietly: the home page works without it.
+// The weekly list is fetched on the server so Home paints with content; other ranges load when picked.
 export async function Trending() {
-  const since = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
   let repos: Awaited<ReturnType<typeof searchRepos>> = [];
   try {
-    repos = await searchRepos(`created:>${since}`, 6, "stars");
+    repos = await searchRepos(trendingQuery("week"), 8, "stars");
   } catch {
-    return null;
+    // The tabs component fetches again on its own, so a failure here just means a short loading state.
   }
-  if (repos.length === 0) return null;
-
-  return (
-    <section>
-      <div className="section-head">
-        <h2>Trending this week</h2>
-        <Link href={`/search?q=${encodeURIComponent(`created:>${since}`)}&sort=stars`}>See more</Link>
-      </div>
-      <p className="muted" style={{ margin: "0 0 4px", fontSize: "0.9rem" }}>Brand-new repos getting the most stars right now.</p>
-      <div className="grid">
-        {repos.map((r) => (
-          <RepoCard key={r.fullName} repo={r} />
-        ))}
-      </div>
-    </section>
-  );
+  return <TrendingTabs initial={repos} />;
 }
