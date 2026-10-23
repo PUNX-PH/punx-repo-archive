@@ -37,8 +37,8 @@ type BookmarksCtx = {
   deleteFolder: (name: string) => Promise<void>;
   openFolderPicker: (fullName: string) => void;
   replaceAll: (next: Bookmark[]) => Promise<void>;
-  /** Saves repos that aren't saved yet into the default folder. Returns how many were new. */
-  saveMany: (repos: Repo[]) => Promise<number>;
+  /** Saves repos that aren't saved yet into a folder (created if needed; the default folder if omitted). Returns how many were new. */
+  saveMany: (repos: Repo[], folder?: string) => Promise<number>;
   /** True when signed in, which is required to share. */
   canShare: boolean;
   /** The user's active shares, one per shared folder. */
@@ -450,12 +450,14 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
   );
 
   const saveMany = useCallback(
-    async (repos: Repo[]) => {
+    async (repos: Repo[], folder?: string) => {
       const have = new Set(bookmarks.map((b) => b.fullName));
       const now = Date.now();
+      // Make sure a named folder exists first, and use its canonical spelling.
+      const target = folder?.trim() ? ((await createFolder(folder)) ?? DEFAULT_LIST) : DEFAULT_LIST;
       const rows: Bookmark[] = repos
         .filter((r) => !have.has(r.fullName))
-        .map((r, i) => ({ ...r, list: DEFAULT_LIST, savedAt: now - i }));
+        .map((r, i) => ({ ...r, list: target, savedAt: now - i }));
       if (rows.length === 0) return 0;
       try {
         if (cloud && user && db) {
@@ -469,10 +471,10 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
         showToast({ message: "Couldn’t save those. Check your connection and try again." });
         return 0;
       }
-      showToast({ message: `Saved ${rows.length} repo${rows.length === 1 ? "" : "s"} to ${DEFAULT_LIST}` });
+      showToast({ message: `Saved ${rows.length} repo${rows.length === 1 ? "" : "s"} to ${target}` });
       return rows.length;
     },
-    [bookmarks, cloud, user, localBookmarks, showToast],
+    [bookmarks, cloud, user, localBookmarks, showToast, createFolder],
   );
 
   const openFolderPicker = useCallback((fullName: string) => setPickerFor(fullName), []);

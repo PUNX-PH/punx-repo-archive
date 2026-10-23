@@ -131,6 +131,13 @@ function Ask() {
         </div>
       </form>
 
+      {(/https?:\/\//i.test(question) || question.length > 400) && (
+        <p className="notice-inline" role="note">
+          Ask can’t open links or files, and questions are limited to 500 characters. To save a list of repos, use{" "}
+          <Link href="/library?import=1" style={{ textDecoration: "underline" }}>Library → Import repos</Link>.
+        </p>
+      )}
+
       {fresh && recent.length > 0 && (
         <section>
           <div className="section-head">

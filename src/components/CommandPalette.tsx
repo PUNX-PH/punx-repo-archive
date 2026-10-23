@@ -63,6 +63,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         out.push({ id: `folder-${f}`, group: "Folders", label: `Open folder “${f}”`, hint: `${n} repo${n === 1 ? "" : "s"}`, run: go(`/library?folder=${encodeURIComponent(f)}`) });
       });
 
+    if (match("import") || match("csv") || match("list")) out.push({ id: "import", group: "Actions", label: "Import repos from a list", run: go("/library?import=1") });
     if (match("theme") || match("dark") || match("light")) out.push({ id: "theme", group: "Actions", label: "Switch theme (Auto, Light, Dark)", run: () => cycleTheme() });
     if (match("accent") || match("color")) out.push({ id: "accent", group: "Actions", label: "Change accent color", run: go("/profile#appearance") });
     return out;

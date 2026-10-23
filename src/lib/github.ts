@@ -87,3 +87,11 @@ export async function getRelated(repo: Repo): Promise<Repo[]> {
     return [];
   }
 }
+
+/** Basic repo info for one owner/name. Null when it doesn't exist; throws on rate limits and outages. */
+export async function getRepoBasic(owner: string, name: string): Promise<Repo | null> {
+  const res = await fetch(`${API}/repos/${owner}/${name}`, { headers: headers(), next: { revalidate: 600 } });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`GitHub request failed (${res.status})`);
+  return toRepo(await res.json());
+}

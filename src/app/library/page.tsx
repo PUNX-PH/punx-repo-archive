@@ -6,6 +6,7 @@ import { Suspense, useEffect, useState } from "react";
 import { BookmarkButton } from "@/components/BookmarkButton";
 import { useBookmarks } from "@/components/BookmarksProvider";
 import { FolderIcon } from "@/components/FolderPicker";
+import { ImportDialog } from "@/components/ImportDialog";
 import { BookmarkIcon, PencilIcon, ShareIcon, StarIcon, TrashIcon } from "@/components/Icons";
 import { formatStars } from "@/components/RepoCard";
 import { ShareDialog } from "@/components/ShareDialog";
@@ -24,6 +25,8 @@ function LibraryInner() {
   } = useBookmarks();
   const params = useSearchParams();
   const wanted = params.get("folder");
+  const wantImport = params.get("import") === "1";
+  const [importOpen, setImportOpen] = useState(wantImport);
   const [view, setView] = useState<"folders" | "shared">("folders");
   const [shareFor, setShareFor] = useState<string | null>(null);
   const [active, setActive] = useState(wanted ?? "All");
@@ -34,6 +37,10 @@ function LibraryInner() {
   // Drag and drop: which repo is being dragged, and which folder tile it is hovering over.
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (wantImport) setImportOpen(true);
+  }, [wantImport]);
 
   useEffect(() => {
     if (wanted) {
@@ -104,6 +111,7 @@ function LibraryInner() {
             Shared{sharedCount > 0 ? ` · ${sharedCount}` : ""}
           </button>
         </div>
+        <button className="btn" onClick={() => setImportOpen(true)}>Import repos</button>
       </div>
 
       {view === "shared" ? (
@@ -338,6 +346,8 @@ function LibraryInner() {
           </section>
         </>
       )}
+
+      {importOpen && <ImportDialog onClose={() => setImportOpen(false)} />}
 
       {shareFor && (
         <ShareDialog

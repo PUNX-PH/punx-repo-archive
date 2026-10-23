@@ -16,8 +16,20 @@ export async function POST(req: Request) {
   if (denied) return denied;
 
   const { question } = (await req.json().catch(() => ({}))) as { question?: string };
-  const q = question?.trim().slice(0, 500);
-  if (!q) return NextResponse.json({ error: "Ask a question first." }, { status: 400 });
+  const raw = question?.trim().slice(0, 500);
+  if (!raw) return NextResponse.json({ error: "Ask a question first." }, { status: 400 });
+
+  // Ask can't open links or files. Drop them from the question, and if nothing else is left, say so
+  // without spending a model call.
+  const hasLink = /https?:\/\/\S+/i.test(raw);
+  const q = hasLink ? raw.replace(/https?:\/\/\S+/gi, " ").replace(/\s+/g, " ").trim() : raw;
+  if (hasLink && q.length < 8) {
+    return NextResponse.json({
+      answer:
+        "I can’t open links or files, so I can’t see what’s behind that one. Describe what you’re looking for in words, or to save a whole list of repos at once, use Library → Import repos.",
+      repos: [],
+    });
+  }
 
   try {
     // Without an API key, degrade to a plain keyword search.
