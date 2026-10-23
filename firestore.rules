@@ -18,6 +18,11 @@ service cloud.firestore {
       allow read, write: if isMember() && request.auth.uid == uid;
     }
 
+    // Shared folders someone opened, so they can find them again.
+    match /users/{uid}/sharedWithMe/{id} {
+      allow read, write: if isMember() && request.auth.uid == uid;
+    }
+
     // Shared folders: any member with the link can read one share by id, but nobody can
     // list or search them except their owner. Only the owner can create, change or remove a share.
     match /shares/{id} {

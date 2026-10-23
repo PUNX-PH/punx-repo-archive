@@ -7,6 +7,7 @@ import { useBookmarks } from "@/components/BookmarksProvider";
 import { FolderIcon } from "@/components/FolderPicker";
 import { BookmarkIcon, ShareIcon, StarIcon } from "@/components/Icons";
 import { formatStars } from "@/components/RepoCard";
+import { SharedFolders } from "@/components/SharedFolders";
 import { ViewCount } from "@/components/Views";
 import { DEFAULT_LIST, FOLDER_SUGGESTIONS, MAX_FOLDER_NAME, sameName, validateFolderName } from "@/lib/folders";
 import { languageColor } from "@/lib/languages";
@@ -15,7 +16,8 @@ import { shareStatKey } from "@/lib/views";
 type Mode = "idle" | "new" | "rename" | "delete";
 
 export default function LibraryPage() {
-  const { bookmarks, folders, ready, createFolder, renameFolder, deleteFolder, openFolderPicker, canShare, shares, shareFolder, unshareFolder } = useBookmarks();
+  const { bookmarks, folders, ready, createFolder, renameFolder, deleteFolder, openFolderPicker, canShare, shares, shareFolder, unshareFolder, sharedWithMe } = useBookmarks();
+  const [view, setView] = useState<"folders" | "shared">("folders");
   const [sharing, setSharing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -111,6 +113,28 @@ export default function LibraryPage() {
     <div className="library">
       <h1>Library</h1>
 
+      <div className="library-tabs">
+        <div className="segmented" role="tablist" aria-label="Library sections">
+          <button role="tab" aria-selected={view === "folders"} className={view === "folders" ? "is-active" : undefined} onClick={() => setView("folders")}>
+            Folders
+          </button>
+          <button role="tab" aria-selected={view === "shared"} className={view === "shared" ? "is-active" : undefined} onClick={() => setView("shared")}>
+            Shared{shares.length + sharedWithMe.length > 0 ? ` · ${shares.length + sharedWithMe.length}` : ""}
+          </button>
+        </div>
+      </div>
+
+      {view === "shared" ? (
+        <div className="library-wide">
+          <SharedFolders
+            onOpenFolder={(f) => {
+              setActive(f);
+              setView("folders");
+            }}
+          />
+        </div>
+      ) : (
+      <>
       <aside className="library-side">
         <div className="folders" role="tablist" aria-label="Folders">
           <button role="tab" aria-selected={current === "All"} className={`folder-tile${current === "All" ? " is-active" : ""}`} onClick={() => { setActive("All"); reset(); }}>
@@ -297,6 +321,8 @@ export default function LibraryPage() {
           ))}
         </div>
       </section>
+      </>
+      )}
     </div>
   );
 }

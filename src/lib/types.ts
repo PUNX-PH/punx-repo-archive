@@ -29,3 +29,12 @@ export type Share = {
   createdAt: number;
   updatedAt: number;
 };
+
+// A folder someone else shared that this user has opened, kept so it can be found again.
+export type SharedWithMe = {
+  shareId: string;
+  folder: string;
+  ownerName: string;
+  repoCount: number;
+  openedAt: number;
+};

@@ -105,17 +105,7 @@ button { font: inherit; cursor: pointer; }
 }
 
 .logo { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.1rem; letter-spacing: -0.03em; }
-.logo-mark {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 1.05rem;
-  line-height: 1;
-}
+.logo-mark { display: inline-flex; line-height: 0; flex: none; }
 .logo-text span { color: var(--accent); }
 
 .page {
@@ -474,7 +464,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ============ Sign-in / profile ============ */
 .gate { max-width: 460px; margin: 6vh auto 0; padding: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: 24px; box-shadow: var(--shadow); }
-.gate .logo-mark { width: 48px; height: 48px; border-radius: 14px; font-size: 1.6rem; margin-bottom: 18px; }
+.gate .logo-mark { margin-bottom: 14px; }
 .gate h1 { font-size: 1.6rem; }
 .gate ul { list-style: none; margin: 16px 0 22px; padding: 0; display: grid; gap: 10px; }
 .gate li { display: flex; gap: 10px; align-items: flex-start; color: var(--muted); font-size: 0.95rem; }
@@ -590,3 +580,14 @@ h1, h2 { text-wrap: balance; }
 .shared-item .grow { flex: 1; min-width: 160px; }
 .shared-item strong { display: block; overflow-wrap: anywhere; }
 .shared-item .btn { min-height: 38px; padding: 0 14px; }
+
+/* ---- Library tabs ---- */
+.segmented button { padding: 7px 14px; border-radius: 999px; font-size: 0.88rem; color: var(--muted); white-space: nowrap; background: none; border: 0; min-height: 36px; }
+.segmented button.is-active { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: var(--shadow-sm); }
+.library-tabs { margin: 4px 0 8px; }
+.library-wide { min-width: 0; }
+.library-wide > section { margin-top: 20px; }
+.library-main { min-width: 0; }
+@media (min-width: 960px) {
+  .library-tabs, .library-wide { grid-column: 1 / -1; }
+}

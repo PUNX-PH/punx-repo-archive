@@ -17,7 +17,7 @@ type State = { status: "loading" } | { status: "missing" } | { status: "error" }
 
 export default function SharedFolderPage() {
   const { id } = useParams<{ id: string }>();
-  const { importFolder } = useBookmarks();
+  const { importFolder, rememberShared } = useBookmarks();
   const { user } = useAuth();
   const [state, setState] = useState<State>({ status: "loading" });
   const [result, setResult] = useState<{ folder: string; added: number } | null>(null);
@@ -25,6 +25,11 @@ export default function SharedFolderPage() {
 
   // The owner previewing their own link shouldn't count as a view.
   const views = useViews(shareStatKey(id), state.status === "ok" && state.share.ownerUid !== user?.uid);
+
+  // Remember folders other people shared, so they appear under Library > Shared.
+  useEffect(() => {
+    if (state.status === "ok") rememberShared(state.share);
+  }, [state, rememberShared]);
 
   useEffect(() => {
     if (!db) return setState({ status: "error" });

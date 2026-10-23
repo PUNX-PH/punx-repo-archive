@@ -27,7 +27,8 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // Skip only Next's own build assets. Don't exclude paths containing a dot: repo pages like
-  // /repo/vercel/next.js must stay locked. There is no public/ folder to leave open.
-  matcher: ["/((?!_next/static|_next/image|favicon\\.ico$).*)"],
+  // Skip only Next's build assets, the favicon and the public brand logos (they must load on the
+  // sign-in page). Don't exclude paths just because they contain a dot: repo pages like
+  // /repo/vercel/next.js must stay locked. These patterns match whole paths from the root only.
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico$|icon\\.svg$|brand/).*)"],
 };

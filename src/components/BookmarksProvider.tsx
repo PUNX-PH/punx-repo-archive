@@ -16,7 +16,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { db } from "@/lib/firebase";
 import { DEFAULT_LIST, sameName } from "@/lib/folders";
 import { MAX_SHARED_REPOS, newShareId, signature, toSharedRepo } from "@/lib/share";
-import type { Bookmark, Repo, Share } from "@/lib/types";
+import type { Bookmark, Repo, Share, SharedWithMe } from "@/lib/types";
 import { useAuth } from "./AuthProvider";
 import { FolderPicker } from "./FolderPicker";
 
@@ -42,6 +42,10 @@ type BookmarksCtx = {
   shares: Share[];
   shareFolder: (folder: string) => Promise<Share | null>;
   unshareFolder: (folder: string) => Promise<void>;
+  /** Folders others shared that this user has opened, newest first. */
+  sharedWithMe: SharedWithMe[];
+  rememberShared: (share: Share) => void;
+  forgetShared: (shareId: string) => Promise<void>;
   /** Copies someone else's shared folder into this library. Returns how many repos were new. */
   importFolder: (folder: string, repos: Repo[]) => Promise<{ folder: string; added: number }>;
 };
@@ -90,6 +94,7 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
   const [toast, setToast] = useState<Toast | null>(null);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [shares, setShares] = useState<Share[]>([]);
+  const [sharedWithMe, setSharedWithMe] = useState<SharedWithMe[]>([]);
   const merged = useRef<string | null>(null);
   const syncing = useRef(new Map<string, string>());
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -101,6 +106,7 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
     if (!user || !db) {
       merged.current = null;
       setShares([]);
+      setSharedWithMe([]);
       setBookmarks(loadBookmarks());
       setFolderNames(loadFolders());
       setReady(true);
@@ -159,10 +165,17 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
       () => {},
     );
 
+    const offSharedWithMe = onSnapshot(
+      query(collection(db, "users", user.uid, "sharedWithMe"), orderBy("openedAt", "desc")),
+      (snap) => setSharedWithMe(snap.docs.map((d) => d.data() as SharedWithMe)),
+      () => {},
+    );
+
     return () => {
       offBookmarks();
       offFolders();
       offShares();
+      offSharedWithMe();
     };
   }, [user, loading]);
 
@@ -388,14 +401,32 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
     [cloud, user, bookmarks, localBookmarks],
   );
 
+  // Called when someone opens a share link, so it shows up under Library > Shared later.
+  const rememberShared = useCallback(
+    (share: Share) => {
+      if (!cloud || !user || !db || share.ownerUid === user.uid) return;
+      const entry: SharedWithMe = { shareId: share.id, folder: share.folder, ownerName: share.ownerName, repoCount: share.repos.length, openedAt: Date.now() };
+      setDoc(doc(db, "users", user.uid, "sharedWithMe", share.id), entry).catch(() => {});
+    },
+    [cloud, user],
+  );
+
+  const forgetShared = useCallback(
+    async (shareId: string) => {
+      if (!cloud || !user || !db) return;
+      await deleteDoc(doc(db, "users", user.uid, "sharedWithMe", shareId));
+    },
+    [cloud, user],
+  );
+
   const openFolderPicker = useCallback((fullName: string) => setPickerFor(fullName), []);
 
   const value = useMemo(
     () => ({
       bookmarks, folders, ready, isSaved, toggle, moveToFolder, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll,
-      canShare: cloud, shares, shareFolder, unshareFolder, importFolder,
+      canShare: cloud, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared,
     }),
-    [bookmarks, folders, ready, isSaved, toggle, moveToFolder, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll, cloud, shares, shareFolder, unshareFolder, importFolder],
+    [bookmarks, folders, ready, isSaved, toggle, moveToFolder, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll, cloud, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared],
   );
 
   const pickerBookmark = pickerFor ? bookmarks.find((b) => b.fullName === pickerFor) : undefined;

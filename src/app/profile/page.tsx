@@ -1,22 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useBookmarks } from "@/components/BookmarksProvider";
-import { CheckIcon, GoogleIcon, ShareIcon } from "@/components/Icons";
-import { ViewCount } from "@/components/Views";
+import { CheckIcon, GoogleIcon } from "@/components/Icons";
+import { LogoMark } from "@/components/LogoMark";
 import { ALLOWED_DOMAIN } from "@/lib/domain";
 import type { Bookmark } from "@/lib/types";
-import { shareStatKey } from "@/lib/views";
 
 // Only follow same-site paths, so a crafted ?next= can't send someone elsewhere.
 const safeNext = (n: string | null) => (n && n.startsWith("/") && !n.startsWith("//") && !n.startsWith("/profile") ? n : null);
 
 function Profile() {
   const { user, loading, configured, authError, signInGoogle, signOut } = useAuth();
-  const { bookmarks, folders, replaceAll, shares, unshareFolder } = useBookmarks();
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { bookmarks, folders, replaceAll } = useBookmarks();
   const router = useRouter();
   const next = safeNext(useSearchParams().get("next"));
   const fileRef = useRef<HTMLInputElement>(null);
@@ -86,48 +85,11 @@ function Profile() {
           </div>
         </div>
 
-        <h2>Shared by you</h2>
-        {shares.length === 0 ? (
-          <p className="muted" style={{ margin: "4px 0 0" }}>
-            No folders shared yet. Open a folder in your Library and choose Share this folder.
-          </p>
-        ) : (
-          <div className="shared-list">
-            {shares.map((sh) => (
-              <div key={sh.id} className="shared-item">
-                <span className="quick-icon"><ShareIcon /></span>
-                <div className="grow">
-                  <strong>{sh.folder}</strong>
-                  <span className="muted" style={{ fontSize: "0.85rem" }}>
-                    {sh.repos.length} repo{sh.repos.length === 1 ? "" : "s"} · <ViewCount statKey={shareStatKey(sh.id)} />
-                  </span>
-                </div>
-                <button
-                  className="btn"
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(`${window.location.origin}/shared/${sh.id}`);
-                      setCopiedId(sh.id);
-                      setTimeout(() => setCopiedId(null), 2500);
-                    } catch {}
-                  }}
-                >
-                  {copiedId === sh.id ? "Copied ✓" : "Copy link"}
-                </button>
-                <button
-                  className="btn"
-                  onClick={() => {
-                    if (window.confirm(`Stop sharing “${sh.folder}”? The link will stop working for everyone who has it.`)) void unshareFolder(sh.folder);
-                  }}
-                >
-                  Stop sharing
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        <p className="muted" style={{ margin: "0 0 8px" }}>
+          Folders you share, and ones teammates shared with you, are under <Link href="/library" style={{ textDecoration: "underline" }}>Library → Shared</Link>.
+        </p>
 
-        <h2 style={{ marginTop: 28 }}>Your data</h2>
+        <h2>Your data</h2>
         <p className="muted" style={{ margin: "4px 0 0" }}>Download a backup of your bookmarks, or import one from a file.</p>
         <div className="actions">
           <button className="btn" onClick={exportJson} disabled={bookmarks.length === 0}>Export bookmarks</button>
@@ -155,7 +117,7 @@ function Profile() {
 
   return (
     <div className="gate">
-      <span className="logo-mark" aria-hidden="true">p</span>
+      <span className="logo-mark"><LogoMark size={56} /></span>
       <h1>Sign in to continue</h1>
       <p className="muted" style={{ margin: 0 }}>Punx Repo Archive is for the Punx team. Use your <strong>@{ALLOWED_DOMAIN}</strong> Google account.</p>
 

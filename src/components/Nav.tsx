@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { User } from "firebase/auth";
+import { LogoMark } from "./LogoMark";
 import { ThemeToggle } from "./ThemeToggle";
 
 const ICONS = {
@@ -24,7 +25,7 @@ const TABS = [
 export function Logo() {
   return (
     <Link href="/" className="logo" aria-label="Punx Repo Archive, home">
-      <span className="logo-mark" aria-hidden="true">p</span>
+      <span className="logo-mark"><LogoMark size={32} /></span>
       <span className="logo-text" translate="no">punx<span>/archive</span></span>
     </Link>
   );
