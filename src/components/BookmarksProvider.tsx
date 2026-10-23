@@ -13,6 +13,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { PREVIEW_MODE } from "@/lib/domain";
 import { db } from "@/lib/firebase";
 import { DEFAULT_LIST, sameName } from "@/lib/folders";
 import { MAX_SHARED_REPOS, newShareId, signature, toSharedRepo } from "@/lib/share";
@@ -321,23 +322,29 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
 
   const shareFolder = useCallback(
     async (folder: string): Promise<Share | null> => {
-      if (!cloud || !user || !db) return null;
+      const live = cloud && user && db;
+      // Local preview only (never in production): no account, so keep shares in memory to try the UI.
+      if (!live && !PREVIEW_MODE) return null;
       const existing = shares.find((s) => sameName(s.folder, folder));
       if (existing) return existing;
       const repos = inFolder(folder).slice(0, MAX_SHARED_REPOS);
       const now = Date.now();
       const share: Share = {
         id: newShareId(),
-        ownerUid: user.uid,
-        ownerName: user.displayName?.trim() || "A Punx user",
+        ownerUid: user?.uid ?? "preview",
+        ownerName: user?.displayName?.trim() || "A Punx user",
         folder,
         repos,
         sig: signature(repos),
         createdAt: now,
         updatedAt: now,
       };
+      if (!live) {
+        setShares((prev) => [...prev, share]);
+        return share;
+      }
       const { id, ...data } = share;
-      await setDoc(doc(db, "shares", id), data);
+      await setDoc(doc(db!, "shares", id), data);
       return share;
     },
     [cloud, user, shares, inFolder],
@@ -345,9 +352,13 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
 
   const unshareFolder = useCallback(
     async (folder: string) => {
-      if (!db) return;
       const s = shares.find((x) => sameName(x.folder, folder));
-      if (s) await deleteDoc(doc(db, "shares", s.id));
+      if (!s) return;
+      if (!db || !cloud) {
+        if (PREVIEW_MODE) setShares((prev) => prev.filter((x) => x.id !== s.id));
+        return;
+      }
+      await deleteDoc(doc(db, "shares", s.id));
     },
     [shares],
   );
@@ -424,7 +435,7 @@ export function BookmarksProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(
     () => ({
       bookmarks, folders, ready, isSaved, toggle, moveToFolder, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll,
-      canShare: cloud, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared,
+      canShare: cloud || PREVIEW_MODE, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared,
     }),
     [bookmarks, folders, ready, isSaved, toggle, moveToFolder, createFolder, renameFolder, deleteFolder, openFolderPicker, replaceAll, cloud, shares, shareFolder, unshareFolder, importFolder, sharedWithMe, rememberShared, forgetShared],
   );

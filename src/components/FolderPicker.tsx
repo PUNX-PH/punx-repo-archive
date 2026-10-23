@@ -18,10 +18,11 @@ export function FolderPicker({ repoName, folders, current, onPick, onCreate, onC
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  // No cleanup: removing the dialog from the page closes it. Calling close() here fires a 'close' event
+  // that would tell the parent to unmount us again (it does, in React's dev double-render).
   useEffect(() => {
     const d = ref.current;
     if (d && !d.open) d.showModal();
-    return () => d?.close();
   }, []);
 
   async function create(value: string) {

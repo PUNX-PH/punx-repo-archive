@@ -36,8 +36,9 @@ export function ViewStat({ statKey, label = "Team views" }: { statKey: string; l
   );
 }
 
-export function ViewCount({ statKey, record = false }: { statKey: string; record?: boolean }) {
+// prefix (like " · ") is only shown together with the count, so there is no dangling separator while it loads.
+export function ViewCount({ statKey, record = false, prefix = "" }: { statKey: string; record?: boolean; prefix?: string }) {
   const views = useViews(statKey, record);
   if (views === null) return null;
-  return <span>{nf.format(views)} view{views === 1 ? "" : "s"}</span>;
+  return <span>{prefix}{nf.format(views)} view{views === 1 ? "" : "s"}</span>;
 }

@@ -591,3 +591,23 @@ h1, h2 { text-wrap: balance; }
 @media (min-width: 960px) {
   .library-tabs, .library-wide { grid-column: 1 / -1; }
 }
+
+/* ---- Folder header and share dialog ---- */
+.folder-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 2px 0 12px; }
+.folder-head h2 { font-size: 1.35rem; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.folder-sub { margin: 2px 0 0; font-size: 0.88rem; }
+.folder-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.library-main .grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+
+.share-dialog { width: min(460px, calc(100vw - 32px)); }
+.share-link { display: flex; gap: 8px; }
+.share-link input { flex: 1; min-width: 0; font-size: 0.85rem; }
+.share-targets { display: flex; flex-wrap: wrap; gap: 8px; }
+.share-targets .btn { flex: 1; min-width: 84px; }
+.share-stop { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 10px; border-top: 1px solid var(--border); }
+
+/* ---- Motion: dialogs ease in; reduced-motion users get none (see the rule above) ---- */
+.folder-dialog[open] { animation: dialog-in 0.18s ease-out; }
+.folder-dialog[open]::backdrop { animation: fade-in 0.18s ease-out; }
+@keyframes dialog-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@keyframes fade-in { from { opacity: 0; } }

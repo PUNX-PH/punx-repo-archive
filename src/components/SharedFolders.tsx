@@ -6,13 +6,21 @@ import { useBookmarks } from "./BookmarksProvider";
 import { FolderIcon } from "./FolderPicker";
 import { ShareIcon } from "./Icons";
 import { ViewCount } from "./Views";
+import { sameName } from "@/lib/folders";
 import { shareStatKey } from "@/lib/views";
 
-// The Library's "Shared" tab: folders you've shared, and folders teammates shared that you've opened.
-export function SharedFolders({ onOpenFolder }: { onOpenFolder: (folder: string) => void }) {
-  const { canShare, shares, unshareFolder, sharedWithMe, forgetShared } = useBookmarks();
+// The Library's "Shared" tab: folders you've shared, folders you could share, and folders
+// teammates shared that you've opened.
+export function SharedFolders({
+  onOpenFolder,
+  onShare,
+}: {
+  onOpenFolder: (folder: string) => void;
+  /** Opens the share dialog for a folder, to create or manage its link. */
+  onShare: (folder: string) => void;
+}) {
+  const { bookmarks, folders, shares, sharedWithMe, forgetShared } = useBookmarks();
   const [copied, setCopied] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   async function copy(id: string) {
     try {
@@ -20,19 +28,14 @@ export function SharedFolders({ onOpenFolder }: { onOpenFolder: (folder: string)
       setCopied(id);
       setTimeout(() => setCopied(null), 2500);
     } catch {
-      // Clipboard blocked: the link can still be opened from the list.
+      // Clipboard blocked: the link is still available from Manage.
     }
   }
 
-  async function stop(folder: string) {
-    if (!window.confirm(`Stop sharing “${folder}”? The link will stop working for everyone who has it.`)) return;
-    setError(null);
-    try {
-      await unshareFolder(folder);
-    } catch {
-      setError("Couldn’t stop sharing. Try again in a moment.");
-    }
-  }
+  // Folders with repos that aren't shared yet: one tap to share each.
+  const shareable = folders
+    .map((f) => ({ name: f, count: bookmarks.filter((b) => sameName(b.list, f)).length }))
+    .filter((f) => f.count > 0 && !shares.some((s) => sameName(s.folder, f.name)));
 
   return (
     <>
@@ -45,9 +48,9 @@ export function SharedFolders({ onOpenFolder }: { onOpenFolder: (folder: string)
             <span className="notice-icon"><ShareIcon /></span>
             <strong>You haven’t shared a folder yet</strong>
             <span>
-              {canShare
-                ? "Open a folder in the Folders tab and press Share this folder to get a link teammates can open."
-                : "Sign in to share folders with a link."}
+              {shareable.length > 0
+                ? "Pick a folder below to get a link teammates can open."
+                : "Save some repos into a folder first, then share it from here."}
             </span>
           </div>
         ) : (
@@ -58,17 +61,29 @@ export function SharedFolders({ onOpenFolder }: { onOpenFolder: (folder: string)
                 <div className="grow">
                   <strong>{s.folder}</strong>
                   <span className="muted" style={{ fontSize: "0.85rem" }}>
-                    {s.repos.length} repo{s.repos.length === 1 ? "" : "s"} · <ViewCount statKey={shareStatKey(s.id)} />
+                    {s.repos.length} repo{s.repos.length === 1 ? "" : "s"}<ViewCount statKey={shareStatKey(s.id)} prefix=" · " />
                   </span>
                 </div>
-                <button className="btn" onClick={() => onOpenFolder(s.folder)}>Open folder</button>
+                <button className="btn" onClick={() => onOpenFolder(s.folder)}>Open</button>
                 <button className="btn" onClick={() => copy(s.id)}>{copied === s.id ? "Copied ✓" : "Copy link"}</button>
-                <button className="btn" onClick={() => stop(s.folder)}>Stop sharing</button>
+                <button className="btn primary" onClick={() => onShare(s.folder)}>Manage</button>
               </div>
             ))}
           </div>
         )}
-        {error && <p className="error" role="alert">{error}</p>}
+
+        {shareable.length > 0 && (
+          <>
+            <p className="muted" style={{ margin: "16px 0 0", fontSize: "0.9rem" }}>Share another folder</p>
+            <div className="chips">
+              {shareable.map((f) => (
+                <button key={f.name} className="chip" onClick={() => onShare(f.name)}>
+                  <ShareIcon size={14} />&nbsp;{f.name} · {f.count}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </section>
 
       <section>
