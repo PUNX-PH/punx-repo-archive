@@ -9,7 +9,7 @@ export default function Loading() {
         </div>
       </div>
       <div className="stats">
-        {[0, 1, 2].map((i) => <div key={i} className="skeleton" style={{ height: 64, borderRadius: 12 }} />)}
+        {[0, 1, 2, 3].map((i) => <div key={i} className="skeleton" style={{ height: 64, borderRadius: 12 }} />)}
       </div>
       <div className="skeleton" style={{ width: "100%", height: 260, marginTop: 24 }} />
     </div>

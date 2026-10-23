@@ -32,5 +32,16 @@ service cloud.firestore {
         && request.resource.data.repos.size() <= 200;
       allow delete: if isMember() && resource.data.ownerUid == request.auth.uid;
     }
+
+    // View counters. Any member can add exactly one view at a time and nothing else.
+    match /stats/{id} {
+      allow get: if isMember();
+      allow create: if isMember()
+        && request.resource.data.keys().hasOnly(['views'])
+        && request.resource.data.views == 1;
+      allow update: if isMember()
+        && request.resource.data.keys().hasOnly(['views'])
+        && request.resource.data.views == resource.data.views + 1;
+    }
   }
 }

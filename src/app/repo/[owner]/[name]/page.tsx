@@ -2,9 +2,11 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { BookmarkButton } from "@/components/BookmarkButton";
 import { Readme } from "@/components/Readme";
+import { ViewStat } from "@/components/Views";
 import { formatStars } from "@/components/RepoCard";
 import { getRepo } from "@/lib/github";
 import { languageColor } from "@/lib/languages";
+import { repoStatKey } from "@/lib/views";
 
 type Props = { params: Promise<{ owner: string; name: string }> };
 
@@ -48,6 +50,7 @@ export default async function RepoPage({ params }: Props) {
         <div className="stat"><strong>{formatStars(repo.stars)}</strong><span>Stars</span></div>
         <div className="stat"><strong>{formatStars(repo.forks)}</strong><span>Forks</span></div>
         <div className="stat"><strong>{timeAgo(repo.updatedAt)}</strong><span>Last updated</span></div>
+        <ViewStat statKey={repoStatKey(repo.owner, repo.name)} />
       </div>
 
       <div className="actions">

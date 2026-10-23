@@ -6,18 +6,25 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { FolderIcon } from "@/components/FolderPicker";
 import { useBookmarks } from "@/components/BookmarksProvider";
+import { useAuth } from "@/components/AuthProvider";
 import { RepoCard } from "@/components/RepoCard";
+import { useViews } from "@/components/Views";
 import { db } from "@/lib/firebase";
 import type { Share } from "@/lib/types";
+import { shareStatKey } from "@/lib/views";
 
 type State = { status: "loading" } | { status: "missing" } | { status: "error" } | { status: "ok"; share: Share };
 
 export default function SharedFolderPage() {
   const { id } = useParams<{ id: string }>();
   const { importFolder } = useBookmarks();
+  const { user } = useAuth();
   const [state, setState] = useState<State>({ status: "loading" });
   const [result, setResult] = useState<{ folder: string; added: number } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // The owner previewing their own link shouldn't count as a view.
+  const views = useViews(shareStatKey(id), state.status === "ok" && state.share.ownerUid !== user?.uid);
 
   useEffect(() => {
     if (!db) return setState({ status: "error" });
@@ -77,7 +84,7 @@ export default function SharedFolderPage() {
           <p className="eyebrow">Shared folder</p>
           <h1>{share.folder}</h1>
           <p className="muted">
-            Shared by {share.ownerName} · {share.repos.length} repo{share.repos.length === 1 ? "" : "s"}
+            Shared by {share.ownerName} · {share.repos.length} repo{share.repos.length === 1 ? "" : "s"}{views !== null && ` · ${views} view${views === 1 ? "" : "s"}`}
           </p>
         </div>
       </div>

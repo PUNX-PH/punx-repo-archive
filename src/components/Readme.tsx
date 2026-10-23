@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import rehypeRaw from "rehype-raw";
+import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 
-// Renders a repo README, collapsed by default since many are very long. Raw HTML is not rendered
-// (react-markdown's default), and relative links/images point back at GitHub so they don't 404 here.
+// Renders a repo README, collapsed by default since many are very long. Embedded HTML is sanitized,
+// and relative links/images point back at GitHub so they don't 404 here.
 export function Readme({ source, owner, name }: { source: string; owner: string; name: string }) {
   const [open, setOpen] = useState(false);
   const long = source.length > 1800;
@@ -20,6 +22,9 @@ export function Readme({ source, owner, name }: { source: string; owner: string;
       <div className="readme">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
+          // Many READMEs open with HTML (centered logos, badges). Parse it, then sanitize with GitHub's
+          // allow-list so scripts, iframes and event handlers are stripped.
+          rehypePlugins={[rehypeRaw, rehypeSanitize]}
           components={{
             a: ({ href = "", children }) => (
               <a href={resolve(href, blob)} target="_blank" rel="noopener noreferrer">{children}</a>

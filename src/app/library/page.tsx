@@ -7,8 +7,10 @@ import { useBookmarks } from "@/components/BookmarksProvider";
 import { FolderIcon } from "@/components/FolderPicker";
 import { BookmarkIcon, ShareIcon, StarIcon } from "@/components/Icons";
 import { formatStars } from "@/components/RepoCard";
+import { ViewCount } from "@/components/Views";
 import { DEFAULT_LIST, FOLDER_SUGGESTIONS, MAX_FOLDER_NAME, sameName, validateFolderName } from "@/lib/folders";
 import { languageColor } from "@/lib/languages";
+import { shareStatKey } from "@/lib/views";
 
 type Mode = "idle" | "new" | "rename" | "delete";
 
@@ -120,6 +122,9 @@ export default function LibraryPage() {
             <button key={f} role="tab" aria-selected={sameName(f, current)} className={`folder-tile${sameName(f, current) ? " is-active" : ""}`} onClick={() => { setActive(f); reset(); }}>
               <FolderIcon />
               <span className="folder-name">{f}</span>
+              {shares.some((s) => sameName(s.folder, f)) && (
+                <span className="folder-shared" title="Shared by link"><ShareIcon size={14} /><span className="sr-only">Shared</span></span>
+              )}
               <span className="folder-count">{count(f)}</span>
             </button>
           ))}
@@ -219,7 +224,8 @@ export default function LibraryPage() {
                   )}
                 </div>
                 <p className="muted share-note">
-                  Anyone on the Punx team with this link can view “{current}” and save a copy. It updates when you change the folder.
+                  Anyone on the Punx team with this link can view “{current}” and save a copy. It updates when you change the folder.{" "}
+                  <strong><ViewCount statKey={shareStatKey(share.id)} /></strong>
                   {count(current) > 200 && " Only the first 200 repos are shared."}{" "}
                   <button className="link-btn" onClick={stopSharing}>Stop sharing</button>
                 </p>
