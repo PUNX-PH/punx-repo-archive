@@ -57,6 +57,10 @@ export const TrashIcon = ({ size = 18 }: P) => (
   <svg {...base(size)}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></svg>
 );
 
+export const UploadIcon = ({ size = 20 }: P) => (
+  <svg {...base(size)}><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" /></svg>
+);
+
 export const GripIcon = ({ size = 18 }: P) => (
   <svg {...base(size)}><circle cx="9" cy="6" r="1" /><circle cx="15" cy="6" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="9" cy="18" r="1" /><circle cx="15" cy="18" r="1" /></svg>
 );

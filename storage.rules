@@ -1,0 +1,24 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Same gate as Firestore: verified @punx.ai Google accounts only.
+    function isMember() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower().matches('.*@punx[.]ai')
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    // files/{uploader}/{fileId}/{name}. The whole team can read; you can only add or remove your own (50 MB max).
+    // Files are never edited in place, so there is no update rule.
+    match /files/{uid}/{fileId}/{name} {
+      allow read: if isMember();
+      allow create: if isMember()
+        && request.auth.uid == uid
+        && request.resource.size > 0
+        && request.resource.size <= 50 * 1024 * 1024;
+      allow delete: if isMember() && request.auth.uid == uid;
+    }
+  }
+}

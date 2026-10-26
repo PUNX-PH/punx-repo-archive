@@ -11,6 +11,7 @@ const ICONS = {
   search: "M11 4a7 7 0 105 12l5 5M11 4a7 7 0 010 14",
   ask: "M4 5h16v11H9l-5 4z",
   library: "M3 6a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z",
+  files: "M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8zM14 3v5h5M9 13h6M9 17h6",
   profile: "M12 12a4 4 0 100-8 4 4 0 000 8zM4 21a8 8 0 0116 0",
 };
 
@@ -19,6 +20,7 @@ const TABS = [
   { href: "/search", label: "Search", icon: ICONS.search },
   { href: "/ask", label: "Ask", icon: ICONS.ask },
   { href: "/library", label: "Library", icon: ICONS.library },
+  { href: "/files", label: "Files", icon: ICONS.files },
   { href: "/profile", label: "Profile", icon: ICONS.profile, mobileOnly: true },
 ];
 

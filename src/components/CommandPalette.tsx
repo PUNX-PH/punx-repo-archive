@@ -14,6 +14,7 @@ const PAGES = [
   { href: "/search", label: "Search" },
   { href: "/ask", label: "Ask" },
   { href: "/library", label: "Library" },
+  { href: "/files", label: "Files" },
   { href: "/profile", label: "Profile and settings" },
 ];
 
