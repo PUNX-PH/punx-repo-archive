@@ -1,3 +1,5 @@
+import { sameName } from "./folders";
+
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_FILE_NAME = 120;
 
@@ -27,7 +29,79 @@ export type ArchiveFile = {
   uploaderName: string;
   /** Milliseconds since the epoch. */
   createdAt: number;
+  /** The team folder it is filed in. Empty (or missing, on older files) means "Unfiled". */
+  folder?: string;
 };
+
+export const folderOf = (f: { folder?: string }) => f.folder?.trim() ?? "";
+
+/** What the page is showing: everything, files with no folder, or one folder. */
+export type FolderView = { type: "all" } | { type: "unfiled" } | { type: "folder"; name: string };
+
+export const inView = (f: { folder?: string }, v: FolderView) =>
+  v.type === "all" ? true : v.type === "unfiled" ? folderOf(f) === "" : sameName(folderOf(f), v.name);
+
+export type FileSort = "new" | "old" | "name" | "big" | "small";
+export type AgeFilter = "any" | "day" | "week" | "month";
+
+export type FileFilters = {
+  query: string;
+  kind: FileKind | "all";
+  /** "all", "me", or an uploader's uid. */
+  uploader: string;
+  age: AgeFilter;
+  sort: FileSort;
+};
+
+export const NO_FILTERS: FileFilters = { query: "", kind: "all", uploader: "all", age: "any", sort: "new" };
+
+export const SORTS: { id: FileSort; label: string }[] = [
+  { id: "new", label: "Newest first" },
+  { id: "old", label: "Oldest first" },
+  { id: "name", label: "Name A–Z" },
+  { id: "big", label: "Largest first" },
+  { id: "small", label: "Smallest first" },
+];
+
+export const AGES: { id: AgeFilter; label: string; days: number }[] = [
+  { id: "any", label: "Any time", days: 0 },
+  { id: "day", label: "Today", days: 1 },
+  { id: "week", label: "Past 7 days", days: 7 },
+  { id: "month", label: "Past 30 days", days: 30 },
+];
+
+/** How many filters (other than sort) are narrowing the list. */
+export const activeFilterCount = (f: FileFilters) =>
+  (f.query.trim() ? 1 : 0) + (f.kind !== "all" ? 1 : 0) + (f.uploader !== "all" ? 1 : 0) + (f.age !== "any" ? 1 : 0);
+
+/** Applies the folder view, every filter and the sort. Search looks at name, extension, person and folder. */
+export function filterFiles(files: ArchiveFile[], view: FolderView, f: FileFilters, me: string | null, now = Date.now()): ArchiveFile[] {
+  const words = f.query.toLowerCase().split(/\s+/).filter(Boolean);
+  const since = AGES.find((a) => a.id === f.age)!.days;
+  const who = f.uploader === "me" ? me : f.uploader;
+
+  const out = files.filter((file) => {
+    if (!inView(file, view)) return false;
+    if (f.kind !== "all" && file.kind !== f.kind) return false;
+    if (f.uploader !== "all" && file.uploaderUid !== who) return false;
+    if (since && now - file.createdAt > since * 864e5) return false;
+    if (words.length) {
+      const hay = `${file.name} ${file.uploaderName} ${folderOf(file)} ${extOf(file.name)}`.toLowerCase();
+      if (!words.every((w) => hay.includes(w))) return false;
+    }
+    return true;
+  });
+
+  const by: Record<FileSort, (a: ArchiveFile, b: ArchiveFile) => number> = {
+    new: (a, b) => b.createdAt - a.createdAt,
+    old: (a, b) => a.createdAt - b.createdAt,
+    name: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+    big: (a, b) => b.size - a.size,
+    small: (a, b) => a.size - b.size,
+  };
+  return out.sort(by[f.sort]);
+}
+
 
 const BY_EXT: Record<string, FileKind> = {
   ppt: "slides", pptx: "slides", pps: "slides", ppsx: "slides", key: "slides", odp: "slides",

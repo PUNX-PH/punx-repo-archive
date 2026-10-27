@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MAX_FILE_NAME, extOf, formatBytes, formatWhen, validateFileName, type ArchiveFile } from "@/lib/files";
+import { MAX_FILE_NAME, extOf, folderOf, formatBytes, formatWhen, validateFileName, type ArchiveFile } from "@/lib/files";
+import { sameName } from "@/lib/folders";
+import { FolderIcon } from "./FolderPicker";
 import { PencilIcon, TrashIcon } from "./Icons";
 import type { FileStore } from "./useFileStore";
 
@@ -45,10 +47,20 @@ function Thumb({ file, urlFor }: { file: ArchiveFile; urlFor: FileStore["urlFor"
   );
 }
 
-// One archived file: a preview or type badge, its details, and Open / Rename / Delete (the last two for the uploader only).
-export function FileCard({ file, store }: { file: ArchiveFile; store: FileStore }) {
+type Props = {
+  file: ArchiveFile;
+  store: FileStore;
+  /** Show which folder it is in (when looking at everything). */
+  showFolder?: boolean;
+  onDragStart?: (id: string) => void;
+  onDragEnd?: () => void;
+  dragged?: boolean;
+};
+
+// One archived file: a preview or type badge, its details, and Open / Move for everyone, Rename / Delete for the uploader.
+export function FileCard({ file, store, showFolder, onDragStart, onDragEnd, dragged }: Props) {
   const mine = store.me !== null && file.uploaderUid === store.me;
-  const [mode, setMode] = useState<"idle" | "rename" | "delete">("idle");
+  const [mode, setMode] = useState<"idle" | "rename" | "delete" | "move">("idle");
   const [draft, setDraft] = useState(file.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +101,19 @@ export function FileCard({ file, store }: { file: ArchiveFile; store: FileStore 
     }
   }
 
+  async function moveTo(folder: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await store.move(file, folder);
+      setMode("idle");
+    } catch {
+      setError("Couldn’t move it. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function confirmDelete() {
     setBusy(true);
     setError(null);
@@ -101,7 +126,16 @@ export function FileCard({ file, store }: { file: ArchiveFile; store: FileStore 
   }
 
   return (
-    <article className="file-card">
+    <article
+      className={`file-card${dragged ? " is-dragged" : ""}`}
+      draggable={mode === "idle"}
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/x-punx-file", file.id);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart?.(file.id);
+      }}
+      onDragEnd={() => onDragEnd?.()}
+    >
       <Thumb file={file} urlFor={store.urlFor} />
 
       <div className="file-body">
@@ -140,6 +174,29 @@ export function FileCard({ file, store }: { file: ArchiveFile; store: FileStore 
         <p className="muted file-meta">
           {formatBytes(file.size)} · {file.uploaderName} · {formatWhen(file.createdAt)}
         </p>
+        {showFolder && folderOf(file) && (
+          <p className="file-folder"><FolderIcon /> <span>{folderOf(file)}</span></p>
+        )}
+
+        {mode === "move" && (
+          <div className="file-move">
+            <label htmlFor={`move-${file.id}`} className="muted">Move to</label>
+            <select
+              id={`move-${file.id}`}
+              value={folderOf(file)}
+              onChange={(e) => void moveTo(e.target.value)}
+              disabled={busy}
+              autoFocus
+            >
+              <option value="">Unfiled</option>
+              {store.folders.map((f) => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+              {folderOf(file) && !store.folders.some((f) => sameName(f, folderOf(file))) && <option value={folderOf(file)}>{folderOf(file)}</option>}
+            </select>
+            <button className="btn" onClick={() => setMode("idle")} disabled={busy}>Cancel</button>
+          </div>
+        )}
 
         {mode === "delete" ? (
           <div className="file-confirm">
@@ -153,6 +210,9 @@ export function FileCard({ file, store }: { file: ArchiveFile; store: FileStore 
           mode === "idle" && (
             <div className="file-row file-actions">
               <button className="btn" onClick={open}>Open</button>
+              <button className="btn btn-ghost" onClick={() => { setMode("move"); setError(null); }} aria-label={`Move ${file.name} to a folder`}>
+                <FolderIcon /> Move
+              </button>
               {mine && (
                 <>
                   <button className="btn btn-ghost" onClick={() => { setDraft(file.name); setMode("rename"); setError(null); }} aria-label={`Rename ${file.name}`}>

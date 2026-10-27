@@ -889,3 +889,28 @@ p, li { overflow-wrap: break-word; }
 .file-rename input { width: 100%; }
 .file-confirm span { font-size: 0.88rem; }
 .file-error { margin: 4px 0 0; font-size: 0.85rem; overflow-wrap: anywhere; }
+
+/* ---- Files: folders, filters, moving ---- */
+.files-head { min-width: 0; }
+@media (min-width: 960px) { .files-head { grid-column: 1 / -1; } }
+.files-page .library-main { min-width: 0; }
+.files-page .dropzone { margin-top: 4px; }
+.filter-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; margin: 4px 0 2px; }
+.select-field { display: flex; flex-direction: column; gap: 3px; font-size: 0.78rem; color: var(--muted); min-width: 0; flex: 1 1 130px; max-width: 220px; }
+.select-field span { font-weight: 600; letter-spacing: 0.02em; }
+.select-field select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+.link-btn.inline { padding: 0; font-size: inherit; }
+.file-folder { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: 0.8rem; color: var(--muted); min-width: 0; }
+.file-folder svg { flex: none; width: 14px; height: 14px; }
+.file-folder span { min-width: 0; overflow-wrap: anywhere; }
+.file-move { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.file-move select { width: 100%; min-width: 0; }
+.file-move label { font-size: 0.82rem; }
+.file-card[draggable="true"] { cursor: grab; }
+.file-card.is-dragged { opacity: 0.45; transform: scale(0.98); }
+.file-thumb img { -webkit-user-drag: none; user-select: none; }
+/* Once the archive has files the drop area shrinks to a single row. */
+.dropzone.compact { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 8px 14px; padding: 14px 16px; }
+.dropzone.compact .notice-icon { margin: 0; width: 36px; height: 36px; }
+.dropzone.compact > .muted:not(.dropzone-hint) { display: none; }
+.dropzone.compact .dropzone-hint { flex-basis: 100%; }

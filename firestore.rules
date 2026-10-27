@@ -38,9 +38,15 @@ service cloud.firestore {
       allow delete: if isMember() && resource.data.ownerUid == request.auth.uid;
     }
 
-    // Archived files: the whole team can see the list. Anyone can add one under their own name (50 MB max);
-    // only the uploader can rename (the name is the only field that may change) or remove it.
+    // Archived files: the whole team can see the list. Anyone can add one under their own name (50 MB max).
+    // Folders are shared team organisation, so any member can move a file (the folder is the only thing they can touch).
+    // Only the uploader can rename or remove it.
     match /files/{id} {
+      function folderOk() {
+        return !('folder' in request.resource.data)
+          || (request.resource.data.folder is string && request.resource.data.folder.size() <= 40);
+      }
+
       allow read: if isMember();
       allow create: if isMember()
         && request.resource.data.uploaderUid == request.auth.uid
@@ -49,14 +55,33 @@ service cloud.firestore {
         && request.resource.data.name.size() <= 120
         && request.resource.data.size is number
         && request.resource.data.size > 0
-        && request.resource.data.size <= 52428800;
+        && request.resource.data.size <= 52428800
+        && folderOk();
       allow update: if isMember()
-        && resource.data.uploaderUid == request.auth.uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name'])
+        && folderOk()
+        && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['folder'])
+          || (
+            resource.data.uploaderUid == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'folder'])
+            && request.resource.data.name is string
+            && request.resource.data.name.size() > 0
+            && request.resource.data.name.size() <= 120
+          )
+        );
+      allow delete: if isMember() && resource.data.uploaderUid == request.auth.uid;
+    }
+
+    // Folders for the file archive. Any member can add, rename or remove one; removing only un-files its files.
+    match /fileFolders/{id} {
+      allow read: if isMember();
+      allow create, update: if isMember()
+        && request.resource.data.keys().hasOnly(['name', 'createdBy', 'createdAt'])
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 120;
-      allow delete: if isMember() && resource.data.uploaderUid == request.auth.uid;
+        && request.resource.data.name.size() <= 40
+        && request.resource.data.createdBy == request.auth.uid;
+      allow delete: if isMember();
     }
 
     // View counters. Any member can add exactly one view at a time and nothing else.
