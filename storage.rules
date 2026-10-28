@@ -18,10 +18,12 @@ service firebase.storage {
         return firestore.get(/databases/(default)/documents/files/$(fileId)).data;
       }
 
-      allow read: if isMember()
-        && (request.auth.uid == uid
-          || shareDoc().get('domain', false) == true
-          || request.auth.token.email.lower() in shareDoc().get('viewers', []));
+      // Anyone (even signed out) can read a file whose owner made it a public HTML page; everyone else needs access.
+      allow read: if (isMember() && request.auth.uid == uid)
+        || shareDoc().get('public', false) == true
+        || (isMember()
+          && (shareDoc().get('domain', false) == true
+            || request.auth.token.email.lower() in shareDoc().get('viewers', [])));
       allow create: if isMember()
         && request.auth.uid == uid
         && request.resource.size > 0

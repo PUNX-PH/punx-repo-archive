@@ -21,7 +21,16 @@ service cloud.firestore {
     function sharingOk(d) {
       return validList(d, 'viewers') && validList(d, 'editors') && validList(d, 'people')
         && (!('domain' in d) || d.domain is bool)
-        && (!('access' in d) || d.access in ['restricted', 'domain']);
+        && (!('access' in d) || d.access in ['restricted', 'domain', 'public'])
+        && publicOk(d);
+    }
+    // 'public' makes an HTML page readable with no sign-in (see the get rule on files). Only HTML files may be public.
+    function publicOk(d) {
+      return !('public' in d)
+        || (d.public is bool
+          && (d.public == false
+            || (d.get('name', '') is string && d.get('name', '').lower().matches('.*[.](html|htm|xhtml|mhtml)')))
+          && (!('access' in d) || d.public == (d.access == 'public')));
     }
     function folderPath(fid) {
       return /databases/$(database)/documents/fileFolders/$(fid);
@@ -79,6 +88,10 @@ service cloud.firestore {
     //   Owner: everything (share, move, rename, delete).   Editor: rename.
     //   Folder owner: can refresh the access fields (and un-file) on files inside their folder.
     match /files/{id} {
+      // One document by id, for anyone, but only when the owner made the HTML page public. Not listable, so
+      // public pages can't be enumerated. The /p/<id> route and Storage use this to serve the page with no sign-in.
+      allow get: if resource.data.get('public', false) == true;
+
       allow read: if isMember()
         && (resource.data.uploaderUid == request.auth.uid
           || resource.data.domain == true
@@ -98,7 +111,7 @@ service cloud.firestore {
         && sharingOk(request.resource.data)
         && (
           (resource.data.uploaderUid == request.auth.uid
-            && changed().hasOnly(['name', 'folderId', 'folder', 'access', 'people', 'domain', 'viewers', 'editors', 'uploaderEmail'])
+            && changed().hasOnly(['name', 'folderId', 'folder', 'access', 'people', 'public', 'domain', 'viewers', 'editors', 'uploaderEmail'])
             && nameOk(120)
             && (!changed().hasAny(['folderId'])
               || (request.resource.data.folderId is string && canEditFolder(request.resource.data.folderId))))

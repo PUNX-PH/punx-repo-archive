@@ -232,7 +232,12 @@ export function useFileStore(): FileStore {
   const roleOnFile = useCallback((f: ArchiveFile) => roleOn({ ownerUid: f.uploaderUid, editors: f.editors }, me), [me]);
   const roleOnFolder = useCallback((f: FolderItem) => roleOn({ ownerUid: f.ownerUid, editors: f.editors }, me), [me]);
 
-  const patchFile = (id: string, p: Partial<ArchiveFile>) => setFiles((all) => all.map((x) => (x.id === id ? { ...x, ...p } : x)));
+  const patchFile = (id: string, p: Partial<ArchiveFile>) => {
+    // Local preview only: keep the copy the file page reads in step with the list.
+    const kept = previewFiles.get(id);
+    if (kept) previewFiles.set(id, { ...kept, file: { ...kept.file, ...p } });
+    setFiles((all) => all.map((x) => (x.id === id ? { ...x, ...p } : x)));
+  };
   const patchFolder = (id: string, p: Partial<FolderItem>) => setFolderList((all) => all.map((x) => (x.id === id ? { ...x, ...p } : x)));
 
   const upload = useCallback<FileStore["upload"]>(
@@ -242,7 +247,7 @@ export function useFileStore(): FileStore {
       const target = folderId ? folderById(folderId) : undefined;
       if (folderId && (!target || roleOnFolder(target) === "viewer")) throw new Error("You can’t add files to that folder.");
       const grants = grantsInFolder(PRIVATE, folderId);
-      const common = { name: file.name, size: file.size, contentType, kind: kindOf(file.name, contentType), createdAt: Date.now(), folderId, access: PRIVATE.access, people: PRIVATE.people, ...grants };
+      const common = { name: file.name, size: file.size, contentType, kind: kindOf(file.name, contentType), createdAt: Date.now(), folderId, access: PRIVATE.access, people: PRIVATE.people, public: false, ...grants };
 
       if (!user || !db || !storage) {
         if (!PREVIEW_MODE) throw new Error("Sign in to upload files.");
@@ -378,7 +383,8 @@ export function useFileStore(): FileStore {
   const shareFile = useCallback<FileStore["shareFile"]>(
     async (file, sharing) => {
       const g = grantsInFolder(sharing, folderIdOf(file));
-      const next = { access: sharing.access, people: sharing.people, domain: g.domain, viewers: g.viewers, editors: g.editors };
+      // `public` is the flag the no-sign-in page and the rules look at; it is only ever true for HTML files.
+      const next = { access: sharing.access, people: sharing.people, public: sharing.access === "public", domain: g.domain, viewers: g.viewers, editors: g.editors };
       if (!db || !user) return patchFile(file.id, next);
       await updateDoc(doc(db, "files", file.id), next);
     },

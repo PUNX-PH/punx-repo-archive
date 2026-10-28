@@ -41,6 +41,8 @@ export type ArchiveFile = {
   domain?: boolean;
   viewers?: string[];
   editors?: string[];
+  /** True when anyone with the /p/<id> link can open this HTML page without signing in. */
+  public?: boolean;
   /** Older files stored a folder name here. Migrated to `folderId` when the owner next opens Files. */
   folder?: string;
 };

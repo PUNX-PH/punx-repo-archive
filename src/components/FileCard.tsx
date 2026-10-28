@@ -89,7 +89,7 @@ export function FileCard({ file, store, showFolder, onShare, onDragStart, onDrag
   const shared = access.icon !== "lock";
 
   async function copyLink() {
-    if (await copyText(fileLink(window.location.origin, file.id))) {
+    if (await copyText(fileLink(window.location.origin, file))) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     } else {

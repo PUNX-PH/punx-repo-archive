@@ -7,7 +7,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { CheckIcon, LinkIcon } from "@/components/Icons";
-import { copyText, fileLink } from "@/lib/copy";
+import { copyText, fileLink, publicLink } from "@/lib/copy";
 import { PREVIEW_MODE } from "@/lib/domain";
 import { accessSummary, roleOn } from "@/lib/file-share";
 import { db, storage } from "@/lib/firebase";
@@ -68,7 +68,7 @@ export default function FilePage() {
   }, [file]);
 
   async function copy() {
-    if (await copyText(fileLink(window.location.origin, id))) {
+    if (file && (await copyText(fileLink(window.location.origin, file)))) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     }
@@ -124,6 +124,9 @@ export default function FilePage() {
           <a className="btn primary" href={url} target="_blank" rel="noopener noreferrer">Open original</a>
         )}
         <button className="btn" onClick={copy}>{copied ? <><CheckIcon size={16} /> Link copied</> : <><LinkIcon size={16} /> Copy link</>}</button>
+        {file.public && kind === "web" && (
+          <a className="btn" href={publicLink(window.location.origin, file.id)} target="_blank" rel="noopener noreferrer">Open public page</a>
+        )}
         {role === "owner" && (
           <Link className="btn" href={`/files?open=${file.id}`}>Manage sharing</Link>
         )}

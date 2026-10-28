@@ -3,10 +3,11 @@ import { ALLOWED_DOMAIN, isPunxEmail } from "./domain";
 // Drive-style sharing for files and folders.
 //   Restricted: only the owner and the people added by email.
 //   Domain: anyone signed in with a punx.ai account (they get View access).
+//   Public: HTML pages only. Anyone with the /p/<id> link can open the page without signing in.
 // A file inside a folder is also reachable by whoever the folder is shared with.
 
 export type Role = "viewer" | "editor";
-export type Access = "restricted" | "domain";
+export type Access = "restricted" | "domain" | "public";
 export type Person = { email: string; role: Role };
 
 /** What someone set up on one item: general access plus the people added by email. */
@@ -47,7 +48,8 @@ export function grantsFor(own: Sharing, folder?: { sharing: Sharing; ownerEmail:
   const editors = uniq([...people.filter((p) => p.role === "editor").map((p) => p.email), ...folderOwner]);
   const viewers = uniq([...people.map((p) => p.email), ...editors]);
   return {
-    domain: own.access === "domain" || folder?.sharing.access === "domain",
+    // A public page is also open to everyone at punx.ai.
+    domain: own.access !== "restricted" || (folder ? folder.sharing.access !== "restricted" : false),
     viewers,
     editors,
   };
@@ -65,7 +67,8 @@ export function roleOn(item: { ownerUid: string; editors?: string[] }, me: Who |
 }
 
 /** One short line for a card: who else can see it. */
-export function accessSummary(s: Sharing): { label: string; icon: "lock" | "people" | "domain" } {
+export function accessSummary(s: Sharing): { label: string; icon: "lock" | "people" | "domain" | "public" } {
+  if (s.access === "public") return { label: "Public link, no sign-in", icon: "public" };
   if (s.access === "domain") return { label: `Anyone at ${ALLOWED_DOMAIN}`, icon: "domain" };
   if (s.people.length === 0) return { label: "Only you", icon: "lock" };
   return { label: `Shared with ${s.people.length}`, icon: "people" };

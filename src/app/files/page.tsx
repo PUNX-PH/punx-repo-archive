@@ -7,10 +7,10 @@ import { FileShareDialog } from "@/components/FileShareDialog";
 import { FolderIcon } from "@/components/FolderPicker";
 import { PencilIcon, ShareIcon, TrashIcon, UploadIcon } from "@/components/Icons";
 import { useFileStore } from "@/components/useFileStore";
-import { fileLink } from "@/lib/copy";
+import { fileLink, publicLink } from "@/lib/copy";
 import { accessSummary } from "@/lib/file-share";
 import {
-  AGES, KINDS, MAX_FILE_BYTES, NO_FILTERS, SORTS, activeFilterCount, filterFiles, folderIdOf, formatBytes, inView, rejectReason, sharingOf,
+  AGES, KINDS, MAX_FILE_BYTES, kindOf, NO_FILTERS, SORTS, activeFilterCount, filterFiles, folderIdOf, formatBytes, inView, rejectReason, sharingOf,
   type AgeFilter, type FileFilters, type FileKind, type FileSort, type FolderView,
 } from "@/lib/files";
 import { MAX_FOLDER_NAME, sameName, validateFolderName } from "@/lib/folders";
@@ -583,7 +583,9 @@ function FilesInner() {
         <FileShareDialog
           target={{ kind: "file", name: shareFile.name, ownerName: shareFile.uploaderName, ownerEmail: shareFile.uploaderEmail ?? "", sharing: sharingOf(shareFile) }}
           canManage={store.roleOnFile(shareFile) === "owner"}
-          link={fileLink(origin, shareFile.id)}
+          link={fileLink(origin, { id: shareFile.id })}
+          allowPublic={kindOf(shareFile.name, shareFile.contentType) === "web"}
+          publicLink={publicLink(origin, shareFile.id)}
           onChange={(s) => store.shareFile(shareFile, s)}
           onClose={() => setShareFor(null)}
         />

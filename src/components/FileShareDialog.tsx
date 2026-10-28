@@ -19,6 +19,9 @@ type Props = {
   canManage: boolean;
   /** The link people can open (it only works for people who have access). */
   link: string;
+  /** HTML pages only: lets the owner open the page to anyone with the link, no sign-in, and gives that link. */
+  allowPublic?: boolean;
+  publicLink?: string;
   onChange: (next: Sharing) => Promise<void>;
   onClose: () => void;
 };
@@ -29,7 +32,7 @@ const ROLES: { id: Role; label: string }[] = [
 ];
 
 // Google Drive-style sharing: add people by email with a role, and choose who else can open it with the link.
-export function FileShareDialog({ target, canManage, link, onChange, onClose }: Props) {
+export function FileShareDialog({ target, canManage, link, allowPublic, publicLink, onChange, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [sharing, setSharing] = useState(target.sharing);
   const [email, setEmail] = useState("");
@@ -76,7 +79,7 @@ export function FileShareDialog({ target, canManage, link, onChange, onClose }: 
 
   async function copy() {
     try {
-      await navigator.clipboard.writeText(link);
+      await navigator.clipboard.writeText(sharing.access === "public" && publicLink ? publicLink : link);
       setCopied(true);
       setTimeout(() => setCopied(false), 2200);
     } catch {
@@ -182,18 +185,21 @@ export function FileShareDialog({ target, canManage, link, onChange, onClose }: 
           >
             <option value="restricted">Restricted</option>
             <option value="domain">Anyone at {ALLOWED_DOMAIN} with the link</option>
+            {(allowPublic || sharing.access === "public") && <option value="public">Anyone with the link, no sign-in</option>}
           </select>
         ) : (
-          <strong>{sharing.access === "domain" ? `Anyone at ${ALLOWED_DOMAIN} with the link` : "Restricted"}</strong>
+          <strong>{sharing.access === "public" ? "Anyone with the link, no sign-in" : sharing.access === "domain" ? `Anyone at ${ALLOWED_DOMAIN} with the link` : "Restricted"}</strong>
         )}
         <p className="muted share-note">
-          {sharing.access === "domain"
-            ? `Anyone signed in with an @${ALLOWED_DOMAIN} account can view this ${noun}.`
-            : `Only the owner and the people above can open this ${noun}.`}
+          {sharing.access === "public"
+            ? "Anyone on the internet with the link can open this page without signing in. Don’t use this for anything confidential."
+            : sharing.access === "domain"
+              ? `Anyone signed in with an @${ALLOWED_DOMAIN} account can view this ${noun}.`
+              : `Only the owner and the people above can open this ${noun}.`}
         </p>
 
         <div className="share-foot">
-          <button className="btn" onClick={copy}>{copied ? <><CheckIcon size={16} /> Link copied</> : "Copy link"}</button>
+          <button className="btn" onClick={copy}>{copied ? <><CheckIcon size={16} /> Link copied</> : sharing.access === "public" ? "Copy public link" : "Copy link"}</button>
           <button className="btn primary" onClick={onClose}>Done</button>
         </div>
         <p className="muted share-note" role="status">{saving ? "Saving…" : ""}</p>
