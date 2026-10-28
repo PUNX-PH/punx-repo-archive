@@ -61,6 +61,10 @@ export const UploadIcon = ({ size = 20 }: P) => (
   <svg {...base(size)}><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" /></svg>
 );
 
+export const LinkIcon = ({ size = 18 }: P) => (
+  <svg {...base(size)}><path d="M10 14a4 4 0 005.7 0l3-3a4 4 0 00-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 00-5.7 0l-3 3a4 4 0 005.7 5.7l1-1" /></svg>
+);
+
 export const GripIcon = ({ size = 18 }: P) => (
   <svg {...base(size)}><circle cx="9" cy="6" r="1" /><circle cx="15" cy="6" r="1" /><circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" /><circle cx="9" cy="18" r="1" /><circle cx="15" cy="18" r="1" /></svg>
 );

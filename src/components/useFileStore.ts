@@ -10,6 +10,7 @@ import { PREVIEW_MODE } from "@/lib/domain";
 import { db, storage } from "@/lib/firebase";
 import { PRIVATE, grantsFor, normEmail, roleOn, type Grants, type MyRole, type Sharing, type Who } from "@/lib/file-share";
 import { folderIdOf, kindOf, newFileId, sharingOf, storageName, type ArchiveFile, type FolderItem } from "@/lib/files";
+import { previewFiles } from "@/lib/preview-files";
 import { useAuth } from "./AuthProvider";
 
 export type FileStore = {
@@ -245,8 +246,11 @@ export function useFileStore(): FileStore {
 
       if (!user || !db || !storage) {
         if (!PREVIEW_MODE) throw new Error("Sign in to upload files.");
-        local.current.set(id, URL.createObjectURL(file));
-        setFiles((f) => [{ id, path: id, uploaderUid: "preview", uploaderName: "You", uploaderEmail: "preview@punx.ai", ...common }, ...f]);
+        const url = URL.createObjectURL(file);
+        local.current.set(id, url);
+        const made: ArchiveFile = { id, path: id, uploaderUid: "preview", uploaderName: "You", uploaderEmail: "preview@punx.ai", ...common };
+        previewFiles.set(id, { file: made, url });
+        setFiles((f) => [made, ...f]);
         onProgress(1);
         return;
       }
@@ -282,6 +286,7 @@ export function useFileStore(): FileStore {
         const url = local.current.get(file.id);
         if (url) URL.revokeObjectURL(url);
         local.current.delete(file.id);
+        previewFiles.delete(file.id);
         setFiles((f) => f.filter((x) => x.id !== file.id));
         return;
       }

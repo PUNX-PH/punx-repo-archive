@@ -7,6 +7,7 @@ import { FileShareDialog } from "@/components/FileShareDialog";
 import { FolderIcon } from "@/components/FolderPicker";
 import { PencilIcon, ShareIcon, TrashIcon, UploadIcon } from "@/components/Icons";
 import { useFileStore } from "@/components/useFileStore";
+import { fileLink } from "@/lib/copy";
 import { accessSummary } from "@/lib/file-share";
 import {
   AGES, KINDS, MAX_FILE_BYTES, NO_FILTERS, SORTS, activeFilterCount, filterFiles, folderIdOf, formatBytes, inView, rejectReason, sharingOf,
@@ -582,7 +583,7 @@ function FilesInner() {
         <FileShareDialog
           target={{ kind: "file", name: shareFile.name, ownerName: shareFile.uploaderName, ownerEmail: shareFile.uploaderEmail ?? "", sharing: sharingOf(shareFile) }}
           canManage={store.roleOnFile(shareFile) === "owner"}
-          link={`${origin}/files?open=${shareFile.id}`}
+          link={fileLink(origin, shareFile.id)}
           onChange={(s) => store.shareFile(shareFile, s)}
           onClose={() => setShareFor(null)}
         />

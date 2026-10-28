@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { copyText, fileLink } from "@/lib/copy";
 import { accessSummary } from "@/lib/file-share";
 import { MAX_FILE_NAME, extOf, folderIdOf, formatBytes, formatWhen, sharingOf, validateFileName, type ArchiveFile } from "@/lib/files";
 import { FolderIcon } from "./FolderPicker";
-import { LockIcon, PencilIcon, ShareIcon, TrashIcon } from "./Icons";
+import { CheckIcon, LinkIcon, LockIcon, PencilIcon, ShareIcon, TrashIcon } from "./Icons";
 import type { FileStore } from "./useFileStore";
 
 const THUMB_LIMIT = 15 * 1024 * 1024;
@@ -69,6 +71,7 @@ export function FileCard({ file, store, showFolder, onShare, onDragStart, onDrag
   const [draft, setDraft] = useState(file.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const cardRef = useRef<HTMLElement>(null);
 
@@ -84,6 +87,15 @@ export function FileCard({ file, store, showFolder, onShare, onDragStart, onDrag
   const movable = store.folders.filter((f) => store.roleOnFolder(f) !== "viewer");
   const access = accessSummary(sharingOf(file));
   const shared = access.icon !== "lock";
+
+  async function copyLink() {
+    if (await copyText(fileLink(window.location.origin, file.id))) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } else {
+      setError("Couldn’t copy. Open the file and copy the address from your browser instead.");
+    }
+  }
 
   async function open() {
     setError(null);
@@ -132,7 +144,9 @@ export function FileCard({ file, store, showFolder, onShare, onDragStart, onDrag
       }}
       onDragEnd={() => onDragEnd?.()}
     >
-      <Thumb file={file} urlFor={store.urlFor} />
+      <Link href={`/files/${file.id}`} className="file-thumb-link" draggable={false} tabIndex={-1} aria-hidden="true">
+        <Thumb file={file} urlFor={store.urlFor} />
+      </Link>
 
       <div className="file-body">
         {mode === "rename" ? (
@@ -164,7 +178,9 @@ export function FileCard({ file, store, showFolder, onShare, onDragStart, onDrag
             </div>
           </form>
         ) : (
-          <h3 className="file-name" title={file.name}>{file.name}</h3>
+          <h3 className="file-name" title={file.name}>
+            <Link href={`/files/${file.id}`} draggable={false}>{file.name}</Link>
+          </h3>
         )}
 
         <p className="muted file-meta">
@@ -210,6 +226,9 @@ export function FileCard({ file, store, showFolder, onShare, onDragStart, onDrag
           mode === "idle" && (
             <div className="file-row file-actions">
               <button className="btn" onClick={open}>Open</button>
+              <button className="btn btn-ghost" onClick={copyLink} aria-label={`Copy link to ${file.name}`}>
+                {copied ? <><CheckIcon size={16} /> Copied</> : <><LinkIcon size={16} /> Copy link</>}
+              </button>
               {owner && (
                 <button className="btn" onClick={() => onShare(file)} aria-label={`Share ${file.name}`}>
                   <ShareIcon size={16} /> Share
