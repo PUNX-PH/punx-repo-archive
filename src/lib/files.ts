@@ -1,4 +1,4 @@
-import { sameName } from "./folders";
+import type { Access, Person, Sharing } from "./file-share";
 
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_FILE_NAME = 120;
@@ -16,7 +16,7 @@ export const KINDS: { id: FileKind; label: string }[] = [
   { id: "other", label: "Other" },
 ];
 
-/** A file someone archived. Everyone on the team can see these; only the uploader can rename or delete. */
+/** A file someone archived. Private to its owner until shared; see file-share.ts. */
 export type ArchiveFile = {
   id: string;
   name: string;
@@ -25,21 +25,55 @@ export type ArchiveFile = {
   kind: FileKind;
   /** Where the bytes live in Firebase Storage. */
   path: string;
+  /** The owner. */
   uploaderUid: string;
   uploaderName: string;
+  uploaderEmail?: string;
   /** Milliseconds since the epoch. */
   createdAt: number;
-  /** The team folder it is filed in. Empty (or missing, on older files) means "Unfiled". */
+  /** The folder it is filed in. Empty or missing means no folder. */
+  folderId?: string;
+  /** The owner's own sharing settings. */
+  access?: Access;
+  people?: Person[];
+  /** Everyone who can reach it (own sharing plus its folder's). Rules and queries use these. */
+  domain?: boolean;
+  viewers?: string[];
+  editors?: string[];
+  /** Older files stored a folder name here. Migrated to `folderId` when the owner next opens Files. */
   folder?: string;
 };
 
-export const folderOf = (f: { folder?: string }) => f.folder?.trim() ?? "";
+/** A folder. Shared the same way files are, and sharing it shares everything inside. */
+export type FolderItem = {
+  id: string;
+  name: string;
+  ownerUid: string;
+  ownerName: string;
+  ownerEmail: string;
+  createdAt: number;
+  access: Access;
+  people: Person[];
+  domain: boolean;
+  viewers: string[];
+  editors: string[];
+};
 
-/** What the page is showing: everything, files with no folder, or one folder. */
-export type FolderView = { type: "all" } | { type: "unfiled" } | { type: "folder"; name: string };
+export const sharingOf = (x: { access?: Access; people?: Person[] }): Sharing => ({ access: x.access ?? "restricted", people: x.people ?? [] });
 
-export const inView = (f: { folder?: string }, v: FolderView) =>
-  v.type === "all" ? true : v.type === "unfiled" ? folderOf(f) === "" : sameName(folderOf(f), v.name);
+export const folderIdOf = (f: { folderId?: string }) => f.folderId ?? "";
+
+/** What the page is showing: everything, files others shared with me, files with no folder, or one folder. */
+export type FolderView = { type: "all" } | { type: "shared" } | { type: "unfiled" } | { type: "folder"; id: string };
+
+export const inView = (f: ArchiveFile, v: FolderView, myUid: string | null) =>
+  v.type === "all"
+    ? true
+    : v.type === "shared"
+      ? f.uploaderUid !== myUid
+      : v.type === "unfiled"
+        ? folderIdOf(f) === ""
+        : folderIdOf(f) === v.id;
 
 export type FileSort = "new" | "old" | "name" | "big" | "small";
 export type AgeFilter = "any" | "day" | "week" | "month";
@@ -74,19 +108,23 @@ export const AGES: { id: AgeFilter; label: string; days: number }[] = [
 export const activeFilterCount = (f: FileFilters) =>
   (f.query.trim() ? 1 : 0) + (f.kind !== "all" ? 1 : 0) + (f.uploader !== "all" ? 1 : 0) + (f.age !== "any" ? 1 : 0);
 
+/** Who is looking, and how to name folders, for the filters below. */
+export type FilterContext = { myUid: string | null; folderNames: ReadonlyMap<string, string>; now?: number };
+
 /** Applies the folder view, every filter and the sort. Search looks at name, extension, person and folder. */
-export function filterFiles(files: ArchiveFile[], view: FolderView, f: FileFilters, me: string | null, now = Date.now()): ArchiveFile[] {
+export function filterFiles(files: ArchiveFile[], view: FolderView, f: FileFilters, ctx: FilterContext): ArchiveFile[] {
+  const now = ctx.now ?? Date.now();
   const words = f.query.toLowerCase().split(/\s+/).filter(Boolean);
   const since = AGES.find((a) => a.id === f.age)!.days;
-  const who = f.uploader === "me" ? me : f.uploader;
+  const who = f.uploader === "me" ? ctx.myUid : f.uploader;
 
   const out = files.filter((file) => {
-    if (!inView(file, view)) return false;
+    if (!inView(file, view, ctx.myUid)) return false;
     if (f.kind !== "all" && file.kind !== f.kind) return false;
     if (f.uploader !== "all" && file.uploaderUid !== who) return false;
     if (since && now - file.createdAt > since * 864e5) return false;
     if (words.length) {
-      const hay = `${file.name} ${file.uploaderName} ${folderOf(file)} ${extOf(file.name)}`.toLowerCase();
+      const hay = `${file.name} ${file.uploaderName} ${ctx.folderNames.get(folderIdOf(file)) ?? ""} ${extOf(file.name)}`.toLowerCase();
       if (!words.every((w) => hay.includes(w))) return false;
     }
     return true;
@@ -101,7 +139,6 @@ export function filterFiles(files: ArchiveFile[], view: FolderView, f: FileFilte
   };
   return out.sort(by[f.sort]);
 }
-
 
 const BY_EXT: Record<string, FileKind> = {
   ppt: "slides", pptx: "slides", pps: "slides", ppsx: "slides", key: "slides", odp: "slides",

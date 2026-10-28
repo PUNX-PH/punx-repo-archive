@@ -10,10 +10,18 @@ service firebase.storage {
         && request.auth.token.firebase.sign_in_provider == 'google.com';
     }
 
-    // files/{uploader}/{fileId}/{name}. The whole team can read; you can only add or remove your own (50 MB max).
+    // files/{owner}/{fileId}/{name}. Reading follows the file's sharing in Firestore (owner, anyone at punx.ai,
+    // or the emails it is shared with). Only the owner can add or remove their own files (50 MB max).
     // Files are never edited in place, so there is no update rule.
     match /files/{uid}/{fileId}/{name} {
-      allow read: if isMember();
+      function shareDoc() {
+        return firestore.get(/databases/(default)/documents/files/$(fileId)).data;
+      }
+
+      allow read: if isMember()
+        && (request.auth.uid == uid
+          || shareDoc().get('domain', false) == true
+          || request.auth.token.email.lower() in shareDoc().get('viewers', []));
       allow create: if isMember()
         && request.auth.uid == uid
         && request.resource.size > 0

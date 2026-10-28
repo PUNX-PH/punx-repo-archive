@@ -10,6 +10,41 @@ service cloud.firestore {
         && request.auth.token.firebase.sign_in_provider == 'google.com';
     }
 
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    // --- Sharing helpers for the file archive ---
+    function validList(d, k) {
+      return !(k in d) || (d[k] is list && d[k].size() <= 100);
+    }
+    function sharingOk(d) {
+      return validList(d, 'viewers') && validList(d, 'editors') && validList(d, 'people')
+        && (!('domain' in d) || d.domain is bool)
+        && (!('access' in d) || d.access in ['restricted', 'domain']);
+    }
+    function folderPath(fid) {
+      return /databases/$(database)/documents/fileFolders/$(fid);
+    }
+    // Folders made before sharing existed have 'createdBy' instead of 'ownerUid'.
+    function folderOwner(f) {
+      return f.get('ownerUid', f.get('createdBy', ''));
+    }
+    function canEditFolder(fid) {
+      return fid == ''
+        || (exists(folderPath(fid))
+          && (folderOwner(get(folderPath(fid)).data) == request.auth.uid
+            || myEmail() in get(folderPath(fid)).data.get('editors', [])));
+    }
+    function changed() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+    function nameOk(max) {
+      return request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= max;
+    }
+
     // Each member can only read and write their own bookmarks and folders.
     match /users/{uid}/bookmarks/{id} {
       allow read, write: if isMember() && request.auth.uid == uid;
@@ -38,50 +73,70 @@ service cloud.firestore {
       allow delete: if isMember() && resource.data.ownerUid == request.auth.uid;
     }
 
-    // Archived files: the whole team can see the list. Anyone can add one under their own name (50 MB max).
-    // Folders are shared team organisation, so any member can move a file (the folder is the only thing they can touch).
-    // Only the uploader can rename or remove it.
+    // Archived files are private to their owner until shared, like Google Drive.
+    // 'domain' (anyone at punx.ai) and 'viewers' / 'editors' (emails) are the effective access: the file's own
+    // sharing plus its folder's. Each person's queries match one of: owner, domain, or their email in viewers.
+    //   Owner: everything (share, move, rename, delete).   Editor: rename.
+    //   Folder owner: can refresh the access fields (and un-file) on files inside their folder.
     match /files/{id} {
-      function folderOk() {
-        return !('folder' in request.resource.data)
-          || (request.resource.data.folder is string && request.resource.data.folder.size() <= 40);
-      }
+      allow read: if isMember()
+        && (resource.data.uploaderUid == request.auth.uid
+          || resource.data.domain == true
+          || myEmail() in resource.data.viewers);
 
-      allow read: if isMember();
       allow create: if isMember()
         && request.resource.data.uploaderUid == request.auth.uid
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 120
+        && nameOk(120)
         && request.resource.data.size is number
         && request.resource.data.size > 0
         && request.resource.data.size <= 52428800
-        && folderOk();
+        && sharingOk(request.resource.data)
+        && (!('folderId' in request.resource.data)
+          || (request.resource.data.folderId is string && canEditFolder(request.resource.data.folderId)));
+
       allow update: if isMember()
-        && folderOk()
+        && sharingOk(request.resource.data)
         && (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['folder'])
-          || (
-            resource.data.uploaderUid == request.auth.uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'folder'])
-            && request.resource.data.name is string
-            && request.resource.data.name.size() > 0
-            && request.resource.data.name.size() <= 120
-          )
+          (resource.data.uploaderUid == request.auth.uid
+            && changed().hasOnly(['name', 'folderId', 'folder', 'access', 'people', 'domain', 'viewers', 'editors', 'uploaderEmail'])
+            && nameOk(120)
+            && (!changed().hasAny(['folderId'])
+              || (request.resource.data.folderId is string && canEditFolder(request.resource.data.folderId))))
+          || (myEmail() in resource.data.get('editors', [])
+            && changed().hasOnly(['name'])
+            && nameOk(120))
+          || (resource.data.get('folderId', '') != ''
+            && exists(folderPath(resource.data.folderId))
+            && folderOwner(get(folderPath(resource.data.folderId)).data) == request.auth.uid
+            && changed().hasOnly(['domain', 'viewers', 'editors', 'folderId'])
+            && request.resource.data.get('folderId', '') in ['', resource.data.folderId])
         );
+
       allow delete: if isMember() && resource.data.uploaderUid == request.auth.uid;
     }
 
-    // Folders for the file archive. Any member can add, rename or remove one; removing only un-files its files.
+    // Folders for the file archive, shared the same way. Only the owner can rename, share or delete one.
     match /fileFolders/{id} {
-      allow read: if isMember();
-      allow create, update: if isMember()
-        && request.resource.data.keys().hasOnly(['name', 'createdBy', 'createdAt'])
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 40
-        && request.resource.data.createdBy == request.auth.uid;
-      allow delete: if isMember();
+      allow read: if isMember()
+        && (resource.data.ownerUid == request.auth.uid
+          || resource.data.createdBy == request.auth.uid
+          || resource.data.domain == true
+          || myEmail() in resource.data.viewers);
+
+      allow create: if isMember()
+        && request.resource.data.ownerUid == request.auth.uid
+        && nameOk(40)
+        && sharingOk(request.resource.data)
+        && request.resource.data.keys().hasOnly(['name', 'ownerUid', 'ownerName', 'ownerEmail', 'createdAt', 'createdBy', 'access', 'people', 'domain', 'viewers', 'editors']);
+
+      allow update: if isMember()
+        && folderOwner(resource.data) == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid
+        && nameOk(40)
+        && sharingOk(request.resource.data)
+        && request.resource.data.keys().hasOnly(['name', 'ownerUid', 'ownerName', 'ownerEmail', 'createdAt', 'createdBy', 'access', 'people', 'domain', 'viewers', 'editors']);
+
+      allow delete: if isMember() && folderOwner(resource.data) == request.auth.uid;
     }
 
     // View counters. Any member can add exactly one view at a time and nothing else.

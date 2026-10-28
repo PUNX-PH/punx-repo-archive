@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { MAX_FILE_NAME, extOf, folderOf, formatBytes, formatWhen, validateFileName, type ArchiveFile } from "@/lib/files";
-import { sameName } from "@/lib/folders";
+import { accessSummary } from "@/lib/file-share";
+import { MAX_FILE_NAME, extOf, folderIdOf, formatBytes, formatWhen, sharingOf, validateFileName, type ArchiveFile } from "@/lib/files";
 import { FolderIcon } from "./FolderPicker";
-import { PencilIcon, TrashIcon } from "./Icons";
+import { LockIcon, PencilIcon, ShareIcon, TrashIcon } from "./Icons";
 import type { FileStore } from "./useFileStore";
 
 const THUMB_LIMIT = 15 * 1024 * 1024;
@@ -50,25 +50,40 @@ function Thumb({ file, urlFor }: { file: ArchiveFile; urlFor: FileStore["urlFor"
 type Props = {
   file: ArchiveFile;
   store: FileStore;
-  /** Show which folder it is in (when looking at everything). */
+  /** Show which folder it is in (when looking at more than one folder). */
   showFolder?: boolean;
+  onShare: (file: ArchiveFile) => void;
   onDragStart?: (id: string) => void;
   onDragEnd?: () => void;
   dragged?: boolean;
+  /** Set when this card was opened from a shared link, so it stands out. */
+  highlighted?: boolean;
 };
 
-// One archived file: a preview or type badge, its details, and Open / Move for everyone, Rename / Delete for the uploader.
-export function FileCard({ file, store, showFolder, onDragStart, onDragEnd, dragged }: Props) {
-  const mine = store.me !== null && file.uploaderUid === store.me;
+// One archived file. What the buttons offer depends on the person's role: owners can do everything,
+// editors can rename, viewers can open.
+export function FileCard({ file, store, showFolder, onShare, onDragStart, onDragEnd, dragged, highlighted }: Props) {
+  const role = store.roleOnFile(file);
+  const owner = role === "owner";
   const [mode, setMode] = useState<"idle" | "rename" | "delete" | "move">("idle");
   const [draft, setDraft] = useState(file.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (mode === "rename") inputRef.current?.select();
   }, [mode]);
+
+  useEffect(() => {
+    if (highlighted) cardRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [highlighted]);
+
+  const folder = store.folders.find((f) => f.id === folderIdOf(file));
+  const movable = store.folders.filter((f) => store.roleOnFolder(f) !== "viewer");
+  const access = accessSummary(sharingOf(file));
+  const shared = access.icon !== "lock";
 
   async function open() {
     setError(null);
@@ -85,50 +100,31 @@ export function FileCard({ file, store, showFolder, onDragStart, onDragEnd, drag
     }
   }
 
-  async function saveName() {
+  async function run(fn: () => Promise<void>, failure: string, done?: () => void) {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      done?.();
+    } catch {
+      setError(failure);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function saveName() {
     const err = validateFileName(draft);
     if (err) return setError(err);
     if (draft.trim() === file.name) return setMode("idle");
-    setBusy(true);
-    try {
-      await store.rename(file, draft.trim());
-      setMode("idle");
-      setError(null);
-    } catch {
-      setError("Couldn’t rename it. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function moveTo(folder: string) {
-    setBusy(true);
-    setError(null);
-    try {
-      await store.move(file, folder);
-      setMode("idle");
-    } catch {
-      setError("Couldn’t move it. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function confirmDelete() {
-    setBusy(true);
-    setError(null);
-    try {
-      await store.remove(file);
-    } catch {
-      setError("Couldn’t delete it. Try again.");
-      setBusy(false);
-    }
+    void run(() => store.rename(file, draft.trim()), "Couldn’t rename it. Try again.", () => setMode("idle"));
   }
 
   return (
     <article
-      className={`file-card${dragged ? " is-dragged" : ""}`}
-      draggable={mode === "idle"}
+      ref={cardRef}
+      className={`file-card${dragged ? " is-dragged" : ""}${highlighted ? " is-highlighted" : ""}`}
+      draggable={owner && mode === "idle"}
       onDragStart={(e) => {
         e.dataTransfer.setData("text/x-punx-file", file.id);
         e.dataTransfer.effectAllowed = "move";
@@ -144,7 +140,7 @@ export function FileCard({ file, store, showFolder, onDragStart, onDragEnd, drag
             className="file-rename"
             onSubmit={(e) => {
               e.preventDefault();
-              void saveName();
+              saveName();
             }}
           >
             <input
@@ -172,10 +168,14 @@ export function FileCard({ file, store, showFolder, onDragStart, onDragEnd, drag
         )}
 
         <p className="muted file-meta">
-          {formatBytes(file.size)} · {file.uploaderName} · {formatWhen(file.createdAt)}
+          {formatBytes(file.size)} · {owner ? "You" : file.uploaderName} · {formatWhen(file.createdAt)}
         </p>
-        {showFolder && folderOf(file) && (
-          <p className="file-folder"><FolderIcon /> <span>{folderOf(file)}</span></p>
+        <p className="file-access" title={owner ? access.label : role === "editor" ? "You can edit" : "You can view"}>
+          {owner ? (shared ? <ShareIcon size={14} /> : <LockIcon size={14} />) : null}
+          <span>{owner ? access.label : role === "editor" ? "Can edit" : "View only"}</span>
+        </p>
+        {showFolder && folder && (
+          <p className="file-folder"><FolderIcon /> <span>{folder.name}</span></p>
         )}
 
         {mode === "move" && (
@@ -183,16 +183,16 @@ export function FileCard({ file, store, showFolder, onDragStart, onDragEnd, drag
             <label htmlFor={`move-${file.id}`} className="muted">Move to</label>
             <select
               id={`move-${file.id}`}
-              value={folderOf(file)}
-              onChange={(e) => void moveTo(e.target.value)}
+              value={folderIdOf(file)}
+              onChange={(e) => void run(() => store.move(file, e.target.value), "Couldn’t move it. Try again.", () => setMode("idle"))}
               disabled={busy}
               autoFocus
             >
-              <option value="">Unfiled</option>
-              {store.folders.map((f) => (
-                <option key={f} value={f}>{f}</option>
+              <option value="">No folder</option>
+              {movable.map((f) => (
+                <option key={f.id} value={f.id}>{f.name}{store.roleOnFolder(f) === "owner" ? "" : ` (${f.ownerName || "shared"})`}</option>
               ))}
-              {folderOf(file) && !store.folders.some((f) => sameName(f, folderOf(file))) && <option value={folderOf(file)}>{folderOf(file)}</option>}
+              {folderIdOf(file) && !movable.some((f) => f.id === folderIdOf(file)) && <option value={folderIdOf(file)}>{folder?.name ?? "Current folder"}</option>}
             </select>
             <button className="btn" onClick={() => setMode("idle")} disabled={busy}>Cancel</button>
           </div>
@@ -200,9 +200,9 @@ export function FileCard({ file, store, showFolder, onDragStart, onDragEnd, drag
 
         {mode === "delete" ? (
           <div className="file-confirm">
-            <span className="muted">Delete this file for everyone?</span>
+            <span className="muted">{shared ? "Delete this file for everyone it’s shared with?" : "Delete this file?"}</span>
             <div className="file-row">
-              <button className="btn danger" onClick={confirmDelete} disabled={busy}>{busy ? "Deleting…" : "Delete"}</button>
+              <button className="btn danger" onClick={() => void run(() => store.remove(file), "Couldn’t delete it. Try again.")} disabled={busy}>{busy ? "Deleting…" : "Delete"}</button>
               <button className="btn" onClick={() => setMode("idle")} disabled={busy}>Cancel</button>
             </div>
           </div>
@@ -210,18 +210,25 @@ export function FileCard({ file, store, showFolder, onDragStart, onDragEnd, drag
           mode === "idle" && (
             <div className="file-row file-actions">
               <button className="btn" onClick={open}>Open</button>
-              <button className="btn btn-ghost" onClick={() => { setMode("move"); setError(null); }} aria-label={`Move ${file.name} to a folder`}>
-                <FolderIcon /> Move
-              </button>
-              {mine && (
-                <>
-                  <button className="btn btn-ghost" onClick={() => { setDraft(file.name); setMode("rename"); setError(null); }} aria-label={`Rename ${file.name}`}>
-                    <PencilIcon size={16} /> Rename
-                  </button>
-                  <button className="btn btn-ghost btn-ghost-danger" onClick={() => { setMode("delete"); setError(null); }} aria-label={`Delete ${file.name}`}>
-                    <TrashIcon size={16} /> Delete
-                  </button>
-                </>
+              {owner && (
+                <button className="btn" onClick={() => onShare(file)} aria-label={`Share ${file.name}`}>
+                  <ShareIcon size={16} /> Share
+                </button>
+              )}
+              {owner && (
+                <button className="btn btn-ghost" onClick={() => { setMode("move"); setError(null); }} aria-label={`Move ${file.name} to a folder`}>
+                  <FolderIcon /> Move
+                </button>
+              )}
+              {role !== "viewer" && (
+                <button className="btn btn-ghost" onClick={() => { setDraft(file.name); setMode("rename"); setError(null); }} aria-label={`Rename ${file.name}`}>
+                  <PencilIcon size={16} /> Rename
+                </button>
+              )}
+              {owner && (
+                <button className="btn btn-ghost btn-ghost-danger" onClick={() => { setMode("delete"); setError(null); }} aria-label={`Delete ${file.name}`}>
+                  <TrashIcon size={16} /> Delete
+                </button>
               )}
             </div>
           )

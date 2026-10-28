@@ -914,3 +914,33 @@ p, li { overflow-wrap: break-word; }
 .dropzone.compact .notice-icon { margin: 0; width: 36px; height: 36px; }
 .dropzone.compact > .muted:not(.dropzone-hint) { display: none; }
 .dropzone.compact .dropzone-hint { flex-basis: 100%; }
+
+/* ---- Files: sharing ---- */
+.share-dialog { width: min(480px, calc(100vw - 32px)); }
+.share-add { display: flex; flex-wrap: wrap; gap: 8px; }
+.share-add input { flex: 1 1 200px; min-width: 0; }
+.share-add select { flex: 0 0 auto; }
+.share-h { font-size: 0.82rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 8px 0 0; }
+.share-people { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; overscroll-behavior: contain; }
+.share-people li { display: flex; align-items: center; gap: 10px; padding: 6px 0; min-width: 0; }
+.share-avatar { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.share-who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.share-who strong, .share-who small { overflow-wrap: anywhere; }
+.share-who small { color: var(--muted); }
+.share-role { flex: none; font-size: 0.88rem; }
+.share-role-select { flex: none; max-width: 46%; min-width: 0; }
+.share-note { margin: 0; font-size: 0.85rem; overflow-wrap: anywhere; }
+.share-error { margin: 0; font-size: 0.88rem; overflow-wrap: anywhere; }
+.share-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.share-dialog select { min-width: 0; max-width: 100%; }
+.file-access { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 0.8rem; color: var(--muted); min-width: 0; }
+.file-access svg { flex: none; }
+.file-access span { min-width: 0; overflow-wrap: anywhere; }
+.file-card.is-highlighted { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); animation: file-flash 1.6s ease-out 1; }
+@keyframes file-flash { 0% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 35%, transparent); } 100% { box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); } }
+/* Long email addresses keep a readable width; the role picker drops under them instead of squeezing them. */
+.share-people { overflow-x: hidden; }
+.share-people li { flex-wrap: wrap; }
+.share-who { flex: 1 1 150px; }
+.share-role-select { flex: 0 1 auto; max-width: 100%; margin-left: 44px; }
+@media (min-width: 520px) { .share-role-select { margin-left: 0; } .share-who { flex-basis: 120px; } }
