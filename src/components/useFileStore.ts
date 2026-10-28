@@ -163,7 +163,8 @@ export function useFileStore(): FileStore {
 
     watch<ArchiveFile>(
       [query(filesCol, where("uploaderUid", "==", uid)), query(filesCol, where("domain", "==", true)), query(filesCol, where("viewers", "array-contains", email))],
-      (id, d) => ({ ...(d as Omit<ArchiveFile, "id">), id }),
+      // The type is worked out here, so files archived before a type existed (like HTML) are sorted into it too.
+      (id, d) => ({ ...(d as Omit<ArchiveFile, "id">), id, kind: kindOf(String(d.name ?? ""), String(d.contentType ?? "")) }),
       setFiles,
       () => setReady(true),
       loadFail,

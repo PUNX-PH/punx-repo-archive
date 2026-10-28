@@ -4,7 +4,7 @@ export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_FILE_NAME = 120;
 
 /** What a file is, for the filter chips and the badge on its card. */
-export type FileKind = "image" | "slides" | "sheet" | "doc" | "pdf" | "media" | "other";
+export type FileKind = "image" | "slides" | "sheet" | "doc" | "pdf" | "web" | "media" | "other";
 
 export const KINDS: { id: FileKind; label: string }[] = [
   { id: "image", label: "Images" },
@@ -12,6 +12,7 @@ export const KINDS: { id: FileKind; label: string }[] = [
   { id: "sheet", label: "Sheets" },
   { id: "doc", label: "Docs" },
   { id: "pdf", label: "PDFs" },
+  { id: "web", label: "Web pages" },
   { id: "media", label: "Audio & video" },
   { id: "other", label: "Other" },
 ];
@@ -145,6 +146,7 @@ const BY_EXT: Record<string, FileKind> = {
   xls: "sheet", xlsx: "sheet", xlsm: "sheet", csv: "sheet", tsv: "sheet", numbers: "sheet", ods: "sheet",
   doc: "doc", docx: "doc", txt: "doc", md: "doc", rtf: "doc", odt: "doc", pages: "doc",
   pdf: "pdf",
+  html: "web", htm: "web", xhtml: "web", mhtml: "web",
   mp3: "media", wav: "media", m4a: "media", mp4: "media", mov: "media", webm: "media", mkv: "media",
 };
 
