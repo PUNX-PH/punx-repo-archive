@@ -24,12 +24,22 @@ service cloud.firestore {
         && (!('access' in d) || d.access in ['restricted', 'domain', 'public'])
         && publicOk(d);
     }
-    // 'public' makes an HTML page readable with no sign-in (see the get rule on files). Only HTML files may be public.
+    // A saved link: an item with no stored file (size 0, empty path) and a web address to send people to.
+    function linkOk(d) {
+      return d.get('contentType', '') == 'text/uri-list'
+        && d.get('size', -1) == 0
+        && d.get('path', 'x') == ''
+        && d.get('url', '') is string
+        && d.get('url', '').matches('https?://.+')
+        && d.get('url', '').size() <= 2000;
+    }
+    // 'public' opens an item with no sign-in (see the get rule on files). Only HTML pages and saved links may be public.
     function publicOk(d) {
       return !('public' in d)
         || (d.public is bool
           && (d.public == false
-            || (d.get('name', '') is string && d.get('name', '').lower().matches('.*[.](html|htm|xhtml|mhtml)')))
+            || (d.get('name', '') is string && d.get('name', '').lower().matches('.*[.](html|htm|xhtml|mhtml)'))
+            || linkOk(d))
           && (!('access' in d) || d.public == (d.access == 'public')));
     }
     function folderPath(fid) {
@@ -88,7 +98,7 @@ service cloud.firestore {
     //   Owner: everything (share, move, rename, delete).   Editor: rename.
     //   Folder owner: can refresh the access fields (and un-file) on files inside their folder.
     match /files/{id} {
-      // One document by id, for anyone, but only when the owner made the HTML page public. Not listable, so
+      // One document by id, for anyone, but only when the owner made the HTML page or saved link public. Not listable, so
       // public pages can't be enumerated. The /p/<id> route and Storage use this to serve the page with no sign-in.
       allow get: if resource.data.get('public', false) == true;
 
@@ -101,8 +111,8 @@ service cloud.firestore {
         && request.resource.data.uploaderUid == request.auth.uid
         && nameOk(120)
         && request.resource.data.size is number
-        && request.resource.data.size > 0
         && request.resource.data.size <= 52428800
+        && (request.resource.data.size > 0 || linkOk(request.resource.data))
         && sharingOk(request.resource.data)
         && (!('folderId' in request.resource.data)
           || (request.resource.data.folderId is string && canEditFolder(request.resource.data.folderId)));

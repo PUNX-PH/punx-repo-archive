@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { copyText, fileLink } from "@/lib/copy";
 import { accessSummary } from "@/lib/file-share";
-import { MAX_FILE_NAME, extOf, folderIdOf, formatBytes, formatWhen, sharingOf, validateFileName, type ArchiveFile } from "@/lib/files";
+import { MAX_FILE_NAME, badgeLabel, folderIdOf, formatBytes, formatWhen, hostOf, sharingOf, validateFileName, type ArchiveFile } from "@/lib/files";
 import { FolderIcon } from "./FolderPicker";
 import { CheckIcon, LinkIcon, LockIcon, PencilIcon, ShareIcon, TrashIcon } from "./Icons";
 import type { FileStore } from "./useFileStore";
@@ -41,10 +41,9 @@ function Thumb({ file, urlFor }: { file: ArchiveFile; urlFor: FileStore["urlFor"
     );
   }
 
-  const ext = extOf(file.name);
   return (
     <div className="file-thumb" aria-hidden="true">
-      <span className="file-badge" data-kind={file.kind}>{(ext || file.kind).slice(0, 5)}</span>
+      <span className="file-badge" data-kind={file.kind}>{badgeLabel(file)}</span>
     </div>
   );
 }
@@ -86,6 +85,8 @@ export function FileCard({ file, store, showFolder, onShare, onDragStart, onDrag
   const folder = store.folders.find((f) => f.id === folderIdOf(file));
   const movable = store.folders.filter((f) => store.roleOnFolder(f) !== "viewer");
   const access = accessSummary(sharingOf(file));
+  // A saved link goes straight to its address (in a new tab); anything else opens its page here.
+  const target = file.kind === "link" && file.url ? file.url : null;
   const shared = access.icon !== "lock";
 
   async function copyLink() {
@@ -99,6 +100,10 @@ export function FileCard({ file, store, showFolder, onShare, onDragStart, onDrag
 
   async function open() {
     setError(null);
+    if (target) {
+      window.open(target, "_blank", "noopener,noreferrer");
+      return;
+    }
     // Open the tab now (while the click still counts) and point it at the file once the link is ready.
     const tab = window.open("", "_blank");
     if (tab) tab.opener = null;
@@ -144,9 +149,15 @@ export function FileCard({ file, store, showFolder, onShare, onDragStart, onDrag
       }}
       onDragEnd={() => onDragEnd?.()}
     >
-      <Link href={`/files/${file.id}`} className="file-thumb-link" draggable={false} tabIndex={-1} aria-hidden="true">
-        <Thumb file={file} urlFor={store.urlFor} />
-      </Link>
+      {target ? (
+        <a href={target} target="_blank" rel="noopener noreferrer" className="file-thumb-link" draggable={false} tabIndex={-1} aria-hidden="true">
+          <Thumb file={file} urlFor={store.urlFor} />
+        </a>
+      ) : (
+        <Link href={`/files/${file.id}`} className="file-thumb-link" draggable={false} tabIndex={-1} aria-hidden="true">
+          <Thumb file={file} urlFor={store.urlFor} />
+        </Link>
+      )}
 
       <div className="file-body">
         {mode === "rename" ? (
@@ -179,12 +190,16 @@ export function FileCard({ file, store, showFolder, onShare, onDragStart, onDrag
           </form>
         ) : (
           <h3 className="file-name" title={file.name}>
-            <Link href={`/files/${file.id}`} draggable={false}>{file.name}</Link>
+            {target ? (
+              <a href={target} target="_blank" rel="noopener noreferrer" draggable={false}>{file.name}</a>
+            ) : (
+              <Link href={`/files/${file.id}`} draggable={false}>{file.name}</Link>
+            )}
           </h3>
         )}
 
         <p className="muted file-meta">
-          {formatBytes(file.size)} · {owner ? "You" : file.uploaderName} · {formatWhen(file.createdAt)}
+          {target ? hostOf(target) : formatBytes(file.size)} · {owner ? "You" : file.uploaderName} · {formatWhen(file.createdAt)}
         </p>
         <p className="file-access" title={owner ? access.label : role === "editor" ? "You can edit" : "You can view"}>
           {owner ? (shared ? <ShareIcon size={14} /> : <LockIcon size={14} />) : null}

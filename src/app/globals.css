@@ -968,3 +968,10 @@ p, li { overflow-wrap: break-word; }
 .file-thumb-link { display: block; color: inherit; }
 .file-name a { color: inherit; text-decoration: none; }
 .file-name a:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---- Saved links ---- */
+.file-badge[data-kind="link"] { --k: #db2777; }
+.link-add { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 520px; margin: 4px auto 0; text-align: left; }
+.link-add input { width: 100%; min-width: 0; }
+.link-add-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.link-add-error { margin: 0; font-size: 0.88rem; overflow-wrap: anywhere; }

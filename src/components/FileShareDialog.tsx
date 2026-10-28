@@ -7,6 +7,8 @@ import { CheckIcon } from "./Icons";
 
 export type ShareTarget = {
   kind: "file" | "folder";
+  /** A saved web address rather than a stored file. */
+  isLink?: boolean;
   name: string;
   ownerName: string;
   ownerEmail: string;
@@ -87,7 +89,7 @@ export function FileShareDialog({ target, canManage, link, allowPublic, publicLi
     }
   }
 
-  const noun = target.kind === "folder" ? "folder" : "file";
+  const noun = target.kind === "folder" ? "folder" : target.isLink ? "link" : "file";
 
   return (
     <dialog
@@ -192,7 +194,9 @@ export function FileShareDialog({ target, canManage, link, allowPublic, publicLi
         )}
         <p className="muted share-note">
           {sharing.access === "public"
-            ? "Anyone on the internet with the link can open this page without signing in. Don’t use this for anything confidential."
+            ? target.isLink
+              ? "Anyone on the internet with the link is sent to the saved address without signing in. The address itself becomes visible to them."
+              : "Anyone on the internet with the link can open this page without signing in. Don’t use this for anything confidential."
             : sharing.access === "domain"
               ? `Anyone signed in with an @${ALLOWED_DOMAIN} account can view this ${noun}.`
               : `Only the owner and the people above can open this ${noun}.`}

@@ -3,8 +3,12 @@ import type { Access, Person, Sharing } from "./file-share";
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 export const MAX_FILE_NAME = 120;
 
+/** A saved link is stored as an item with this content type and a `url`; there is no file behind it. */
+export const LINK_TYPE = "text/uri-list";
+export const MAX_URL = 2000;
+
 /** What a file is, for the filter chips and the badge on its card. */
-export type FileKind = "image" | "slides" | "sheet" | "doc" | "pdf" | "web" | "media" | "other";
+export type FileKind = "image" | "slides" | "sheet" | "doc" | "pdf" | "web" | "link" | "media" | "other";
 
 export const KINDS: { id: FileKind; label: string }[] = [
   { id: "image", label: "Images" },
@@ -13,6 +17,7 @@ export const KINDS: { id: FileKind; label: string }[] = [
   { id: "doc", label: "Docs" },
   { id: "pdf", label: "PDFs" },
   { id: "web", label: "Web pages" },
+  { id: "link", label: "Links" },
   { id: "media", label: "Audio & video" },
   { id: "other", label: "Other" },
 ];
@@ -41,8 +46,10 @@ export type ArchiveFile = {
   domain?: boolean;
   viewers?: string[];
   editors?: string[];
-  /** True when anyone with the /p/<id> link can open this HTML page without signing in. */
+  /** True when anyone with the /p/<id> link can open this HTML page (or be sent to this saved link) without signing in. */
   public?: boolean;
+  /** For saved links: where opening it sends you. Such an item has no stored file (size 0, empty path). */
+  url?: string;
   /** Older files stored a folder name here. Migrated to `folderId` when the owner next opens Files. */
   folder?: string;
 };
@@ -127,7 +134,7 @@ export function filterFiles(files: ArchiveFile[], view: FolderView, f: FileFilte
     if (f.uploader !== "all" && file.uploaderUid !== who) return false;
     if (since && now - file.createdAt > since * 864e5) return false;
     if (words.length) {
-      const hay = `${file.name} ${file.uploaderName} ${ctx.folderNames.get(folderIdOf(file)) ?? ""} ${extOf(file.name)}`.toLowerCase();
+      const hay = `${file.name} ${file.uploaderName} ${ctx.folderNames.get(folderIdOf(file)) ?? ""} ${extOf(file.name)} ${file.url ?? ""}`.toLowerCase();
       if (!words.every((w) => hay.includes(w))) return false;
     }
     return true;
@@ -161,6 +168,7 @@ export function extOf(name: string): string {
 }
 
 export function kindOf(name: string, contentType: string): FileKind {
+  if (contentType === LINK_TYPE) return "link";
   if (contentType.startsWith("image/")) return "image";
   if (contentType.startsWith("audio/") || contentType.startsWith("video/")) return "media";
   return BY_EXT[extOf(name)] ?? "other";
@@ -207,3 +215,49 @@ export function formatWhen(ms: number): string {
 export function newFileId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/**
+ * Turns what someone typed into a safe web address, or explains what's wrong.
+ * Only http and https are accepted (never javascript: or data:), and a missing scheme is assumed to be https.
+ */
+export function parseLink(raw: string): { ok: true; url: string; host: string } | { ok: false; error: string } {
+  const text = raw.trim();
+  if (!text) return { ok: false, error: "Paste a web address." };
+  if (/\s/.test(text)) return { ok: false, error: "A web address can’t contain spaces." };
+  // "example.com:8080/x" has a colon but no scheme; "javascript:alert(1)" has a scheme, and is rejected below.
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(text) && !/^[^/]+:\d+(\/|$)/.test(text) ? text : `https://${text}`;
+  let u: URL;
+  try {
+    u = new URL(withScheme);
+  } catch {
+    return { ok: false, error: "That doesn’t look like a web address." };
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: "Only http and https links can be saved." };
+  if (!u.hostname.includes(".") && u.hostname !== "localhost") return { ok: false, error: "That doesn’t look like a web address." };
+  if (u.href.length > MAX_URL) return { ok: false, error: "That address is too long." };
+  return { ok: true, url: u.href, host: u.hostname.replace(/^www\./, "") };
+}
+
+/** A readable default title for a saved link: the site, plus the path when there is one. */
+export function linkTitle(url: string): string {
+  try {
+    const u = new URL(url);
+    // File names can't contain slashes, so the path is shown with a separator instead: "example.com › guides › start".
+    const path = u.pathname.split("/").filter(Boolean).map((p) => { try { return decodeURIComponent(p); } catch { return p; } }).join(" › ");
+    return (u.hostname.replace(/^www\./, "") + (path ? ` › ${path}` : "")).replace(/[\\/]/g, "‹").slice(0, MAX_FILE_NAME);
+  } catch {
+    return url.slice(0, MAX_FILE_NAME);
+  }
+}
+
+export const hostOf = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+};
+
+/** What to print on a file's badge: the extension, or LINK for saved links. */
+export const badgeLabel = (file: { name: string; kind: FileKind }): string =>
+  file.kind === "link" ? "LINK" : (extOf(file.name) || file.kind).slice(0, 5);

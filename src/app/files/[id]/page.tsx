@@ -11,7 +11,7 @@ import { copyText, fileLink, publicLink } from "@/lib/copy";
 import { PREVIEW_MODE } from "@/lib/domain";
 import { accessSummary, roleOn } from "@/lib/file-share";
 import { db, storage } from "@/lib/firebase";
-import { extOf, formatBytes, formatWhen, kindOf, sharingOf, type ArchiveFile } from "@/lib/files";
+import { badgeLabel, formatBytes, formatWhen, hostOf, kindOf, sharingOf, type ArchiveFile } from "@/lib/files";
 import { previewFiles } from "@/lib/preview-files";
 
 type Loaded = { status: "loading" } | { status: "denied" } | { status: "ready"; file: ArchiveFile };
@@ -63,6 +63,12 @@ export default function FilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path]);
 
+  // A saved link is a shortcut: opening it takes you to its address.
+  const savedUrl = file && file.kind === "link" ? file.url : undefined;
+  useEffect(() => {
+    if (savedUrl && !PREVIEW_MODE) window.location.replace(savedUrl);
+  }, [savedUrl]);
+
   useEffect(() => {
     if (file) document.title = `${file.name} · Punx Repo Archive`;
   }, [file]);
@@ -98,18 +104,30 @@ export default function FilePage() {
   }
 
   const kind = kindOf(file.name, file.contentType);
+
+  if (savedUrl) {
+    return (
+      <>
+        <p className="eyebrow"><Link href="/files">← All files</Link></p>
+        <div className="notice" role="status">
+          <strong>{file.name}</strong>
+          <span>{PREVIEW_MODE ? "Preview: this would send you to" : "Taking you to"} {hostOf(savedUrl)}…</span>
+          <a className="btn primary" href={savedUrl} rel="noopener noreferrer">Go now</a>
+        </div>
+      </>
+    );
+  }
   const role = roleOn(
     { ownerUid: file.uploaderUid, editors: file.editors },
     user ? { uid: user.uid, email: user.email ?? "" } : PREVIEW_MODE ? { uid: "preview", email: "" } : null,
   );
   const access = accessSummary(sharingOf(file));
-  const ext = extOf(file.name);
-
+  
   return (
     <article className="viewer">
       <p className="eyebrow"><Link href="/files">← All files</Link></p>
       <div className="viewer-head">
-        <span className="file-badge" data-kind={kind}>{(ext || kind).slice(0, 5)}</span>
+        <span className="file-badge" data-kind={kind}>{badgeLabel({ name: file.name, kind })}</span>
         <div className="viewer-title">
           <h1>{file.name}</h1>
           <p className="muted">
@@ -154,7 +172,7 @@ export default function FilePage() {
           <audio className="viewer-audio" src={url} controls />
         ) : (
           <div className="viewer-nopreview">
-            <span className="file-badge" data-kind={kind}>{(ext || kind).slice(0, 5)}</span>
+            <span className="file-badge" data-kind={kind}>{badgeLabel({ name: file.name, kind })}</span>
             <p className="muted">There’s no preview for this type of file. Use Open original to download or open it.</p>
           </div>
         )}

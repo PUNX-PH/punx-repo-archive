@@ -10,7 +10,7 @@ import { useFileStore } from "@/components/useFileStore";
 import { fileLink, publicLink } from "@/lib/copy";
 import { accessSummary } from "@/lib/file-share";
 import {
-  AGES, KINDS, MAX_FILE_BYTES, kindOf, NO_FILTERS, SORTS, activeFilterCount, filterFiles, folderIdOf, formatBytes, inView, rejectReason, sharingOf,
+  AGES, KINDS, MAX_FILE_BYTES, kindOf, linkTitle, parseLink, validateFileName, NO_FILTERS, SORTS, activeFilterCount, filterFiles, folderIdOf, formatBytes, inView, rejectReason, sharingOf,
   type AgeFilter, type FileFilters, type FileKind, type FileSort, type FolderView,
 } from "@/lib/files";
 import { MAX_FOLDER_NAME, sameName, validateFolderName } from "@/lib/folders";
@@ -48,6 +48,12 @@ function FilesInner() {
   const [highlight, setHighlight] = useState<string | null>(null);
   const [linkProblem, setLinkProblem] = useState<string | null>(null);
   const linkHandled = useRef<string | null>(null);
+  // Saving a web address as an item.
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkName, setLinkName] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
 
   const patch = (key: number, p: Partial<Upload>) => setUploads((u) => u.map((x) => (x.key === key ? { ...x, ...p } : x)));
   const set = <K extends keyof FileFilters>(k: K, v: FileFilters[K]) => setFilters((f) => ({ ...f, [k]: v }));
@@ -122,6 +128,27 @@ function FilesInner() {
       }
     };
     await Promise.all(Array.from({ length: Math.min(PARALLEL, ok.length) }, worker));
+  }
+
+  async function submitLink(e: React.FormEvent) {
+    e.preventDefault();
+    const parsed = parseLink(linkUrl);
+    if (!parsed.ok) return setLinkError(parsed.error);
+    const name = linkName.trim() || linkTitle(parsed.url);
+    const nameError = validateFileName(name);
+    if (nameError) return setLinkError(nameError);
+    setLinkBusy(true);
+    try {
+      await store.addLink(parsed.url, name, uploadTarget);
+      setLinkOpen(false);
+      setLinkUrl("");
+      setLinkName("");
+      setLinkError(null);
+    } catch (err) {
+      setLinkError(err instanceof Error && /can.t add/.test(err.message) ? err.message : "Couldn’t save the link. Try again.");
+    } finally {
+      setLinkBusy(false);
+    }
   }
 
   function resetFolderForm() {
@@ -426,6 +453,7 @@ function FilesInner() {
             <strong>{over ? "Drop to upload" : "Drag files here"}</strong>
             <span className="muted">or</span>
             <button className="btn primary" onClick={() => pickRef.current?.click()}>Choose files</button>
+            <button className="btn" onClick={() => { setLinkOpen((o) => !o); setLinkError(null); }} aria-expanded={linkOpen}>Add a link</button>
             <input
               ref={pickRef}
               type="file"
@@ -436,6 +464,37 @@ function FilesInner() {
                 e.target.value = "";
               }}
             />
+            {linkOpen && (
+              <form className="link-add" onSubmit={(e) => void submitLink(e)}>
+                <input
+                  autoFocus
+                  type="text"
+                  inputMode="url"
+                  value={linkUrl}
+                  onChange={(e) => { setLinkUrl(e.target.value); setLinkError(null); }}
+                  placeholder="Paste a web address, e.g. https://docs.google.com/…"
+                  aria-label="Web address"
+                  aria-invalid={Boolean(linkError)}
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={linkBusy}
+                />
+                <input
+                  value={linkName}
+                  maxLength={120}
+                  onChange={(e) => setLinkName(e.target.value)}
+                  placeholder="Title (optional)"
+                  aria-label="Title"
+                  autoComplete="off"
+                  disabled={linkBusy}
+                />
+                <div className="link-add-row">
+                  <button className="btn primary" type="submit" disabled={linkBusy || !linkUrl.trim()}>{linkBusy ? "Saving…" : "Save link"}</button>
+                  <button className="btn" type="button" onClick={() => { setLinkOpen(false); setLinkError(null); }} disabled={linkBusy}>Cancel</button>
+                </div>
+                {linkError && <p className="error link-add-error" role="alert">{linkError}</p>}
+              </form>
+            )}
             <span className="muted dropzone-hint">
               {currentFolder ? <>Goes into <strong>{currentFolder.name}</strong>{folderAccess && folderAccess.icon !== "lock" ? " and is shared the same way as the folder" : ""}. </> : "New files are private to you. "}
               Up to {formatBytes(MAX_FILE_BYTES)} each. Programs (.exe, .msi, …) aren’t allowed.
@@ -581,10 +640,10 @@ function FilesInner() {
 
       {shareFile && (
         <FileShareDialog
-          target={{ kind: "file", name: shareFile.name, ownerName: shareFile.uploaderName, ownerEmail: shareFile.uploaderEmail ?? "", sharing: sharingOf(shareFile) }}
+          target={{ kind: "file", isLink: shareFile.kind === "link", name: shareFile.name, ownerName: shareFile.uploaderName, ownerEmail: shareFile.uploaderEmail ?? "", sharing: sharingOf(shareFile) }}
           canManage={store.roleOnFile(shareFile) === "owner"}
           link={fileLink(origin, { id: shareFile.id })}
-          allowPublic={kindOf(shareFile.name, shareFile.contentType) === "web"}
+          allowPublic={["web", "link"].includes(kindOf(shareFile.name, shareFile.contentType))}
           publicLink={publicLink(origin, shareFile.id)}
           onChange={(s) => store.shareFile(shareFile, s)}
           onClose={() => setShareFor(null)}

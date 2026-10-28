@@ -1,6 +1,9 @@
-// Serving an HTML page to people who aren't signed in (the /p/<id> route).
+// Serving a public item to people who aren't signed in (the /p/<id> route): an HTML page, or a saved link that sends
+// them on to its address.
 // Everything here is checked against Firestore and Storage's own rules by calling them as an anonymous visitor,
 // so a page is only served if its owner marked it public.
+
+import { LINK_TYPE, MAX_URL } from "./files";
 
 const HTML_NAME = /\.(html|htm|xhtml|mhtml)$/i;
 
@@ -11,15 +14,33 @@ export const isFileId = (id: string) => /^[a-z0-9]{8,40}$/.test(id);
 
 type FirestoreValue = { stringValue?: string; booleanValue?: boolean };
 
-/** What the page needs from a document fetched through Firestore's REST API, or null if it isn't a servable public page. */
-export function servablePage(doc: unknown): { path: string; name: string } | null {
+export type Servable = { type: "html"; path: string; name: string } | { type: "redirect"; url: string };
+
+/** Only plain web addresses are ever redirected to, never javascript:, data: and the like. */
+export function safeRedirect(url: string | undefined): string | null {
+  if (!url || url.length > MAX_URL) return null;
+  try {
+    const u = new URL(url);
+    return u.protocol === "http:" || u.protocol === "https:" ? u.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What to serve for a document fetched through Firestore's REST API, or null if it isn't a public page or link. */
+export function servablePage(doc: unknown): Servable | null {
   const fields = (doc as { fields?: Record<string, FirestoreValue> } | null)?.fields;
   if (!fields) return null;
+  if (fields.public?.booleanValue !== true) return null;
+  if (fields.contentType?.stringValue === LINK_TYPE) {
+    const url = safeRedirect(fields.url?.stringValue);
+    return url ? { type: "redirect", url } : null;
+  }
   const path = fields.path?.stringValue;
   const name = fields.name?.stringValue;
-  if (fields.public?.booleanValue !== true || !path || !name) return null;
+  if (!path || !name) return null;
   if (!isHtmlName(name) || !path.startsWith("files/") || path.includes("..")) return null;
-  return { path, name };
+  return { type: "html", path, name };
 }
 
 /**
@@ -32,6 +53,13 @@ export const PAGE_HEADERS: Record<string, string> = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "no-referrer",
   // Unlisted: reachable by link only, not by search engines. Short cache so turning sharing off takes effect quickly.
+  "X-Robots-Tag": "noindex, nofollow",
+  "Cache-Control": "public, max-age=60, s-maxage=60",
+};
+
+/** Sent with the redirect for a public saved link. */
+export const REDIRECT_HEADERS: Record<string, string> = {
+  "Referrer-Policy": "no-referrer",
   "X-Robots-Tag": "noindex, nofollow",
   "Cache-Control": "public, max-age=60, s-maxage=60",
 };

@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PREVIEW_MODE } from "@/lib/domain";
 import { db, storage } from "@/lib/firebase";
 import { PRIVATE, grantsFor, normEmail, roleOn, type Grants, type MyRole, type Sharing, type Who } from "@/lib/file-share";
-import { folderIdOf, kindOf, newFileId, sharingOf, storageName, type ArchiveFile, type FolderItem } from "@/lib/files";
+import { LINK_TYPE, folderIdOf, kindOf, newFileId, sharingOf, storageName, type ArchiveFile, type FolderItem } from "@/lib/files";
 import { previewFiles } from "@/lib/preview-files";
 import { useAuth } from "./AuthProvider";
 
@@ -28,6 +28,8 @@ export type FileStore = {
   roleOnFolder: (folder: FolderItem) => MyRole;
   /** `folderId` is where the file goes; empty means no folder. New files are private to their owner. */
   upload: (file: File, folderId: string, onProgress: (fraction: number) => void) => Promise<void>;
+  /** Saves a web address (already checked with parseLink). Opening it sends people to that address. Private until shared. */
+  addLink: (url: string, name: string, folderId: string) => Promise<void>;
   /** Owner only. */
   remove: (file: ArchiveFile) => Promise<void>;
   /** Owner or editor. */
@@ -295,13 +297,43 @@ export function useFileStore(): FileStore {
         setFiles((f) => f.filter((x) => x.id !== file.id));
         return;
       }
-      // Bytes first: if this fails nothing is lost, and a file that's already gone is fine.
-      await deleteObject(ref(storage, file.path)).catch((e) => {
-        if ((e as { code?: string }).code !== "storage/object-not-found") throw e;
-      });
+      // Bytes first: if this fails nothing is lost, and a file that's already gone is fine. A saved link has no bytes.
+      if (file.path) {
+        await deleteObject(ref(storage, file.path)).catch((e) => {
+          if ((e as { code?: string }).code !== "storage/object-not-found") throw e;
+        });
+      }
       await deleteDoc(doc(db, "files", file.id));
     },
     [user],
+  );
+
+  const addLink = useCallback<FileStore["addLink"]>(
+    async (url, name, folderId) => {
+      const target = folderId ? folderById(folderId) : undefined;
+      if (folderId && (!target || roleOnFolder(target) === "viewer")) throw new Error("You can’t add files to that folder.");
+      const id = newFileId();
+      const grants = grantsInFolder(PRIVATE, folderId);
+      const common = {
+        name, size: 0, contentType: LINK_TYPE, kind: "link" as const, createdAt: Date.now(), folderId,
+        access: PRIVATE.access, people: PRIVATE.people, public: false, ...grants, url, path: "",
+      };
+      if (!user || !db) {
+        if (!PREVIEW_MODE) throw new Error("Sign in to save links.");
+        const made: ArchiveFile = { id, uploaderUid: "preview", uploaderName: "You", uploaderEmail: "preview@punx.ai", ...common };
+        previewFiles.set(id, { file: made, url: "" });
+        setFiles((f) => [made, ...f]);
+        return;
+      }
+      await setDoc(doc(db, "files", id), {
+        ...common,
+        uploaderUid: user.uid,
+        uploaderName: user.displayName ?? user.email ?? "Someone",
+        uploaderEmail: normEmail(user.email ?? ""),
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, roleOnFolder],
   );
 
   const rename = useCallback<FileStore["rename"]>(
@@ -425,8 +457,8 @@ export function useFileStore(): FileStore {
   return useMemo(
     () => ({
       files, folders, ready, problem, temporary: !cloud, me, roleOnFile, roleOnFolder,
-      upload, remove, rename, move, createFolder, renameFolder, deleteFolder, shareFile, shareFolder, urlFor,
+      upload, addLink, remove, rename, move, createFolder, renameFolder, deleteFolder, shareFile, shareFolder, urlFor,
     }),
-    [files, folders, ready, problem, cloud, me, roleOnFile, roleOnFolder, upload, remove, rename, move, createFolder, renameFolder, deleteFolder, shareFile, shareFolder, urlFor],
+    [files, folders, ready, problem, cloud, me, roleOnFile, roleOnFolder, upload, addLink, remove, rename, move, createFolder, renameFolder, deleteFolder, shareFile, shareFolder, urlFor],
   );
 }
